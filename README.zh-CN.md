@@ -7,7 +7,7 @@
 - **缩进**：可处理不完整的代码，提供 Chez 形式（`library`、`syntax-case`、`fluid-let`、`trace-lambda` 等）的缩进规则，以及格式化工具（`:Chez format`、conform.nvim）。
 - **高亮**：针对 Chez 语法、所有 (chezscheme) 过程、`#!chezscheme`、`#%car` 和 `#;` 数据注释的 tree-sitter 查询扩展。
 - **REPL**：每个项目独立运行；可对形式、顶层形式、选区、缓冲区或文件求值；结果以虚拟文本显示，程序输出显示在 REPL 窗口中；`(read)` 由 Neovim 响应；可通过 SIGINT 中断；回溯信息可导入 quickfix；在失败的调用处显示诊断；自动导入已求值的库；提供带历史记录的提示符缓冲区。
-- **补全**：blink.cmp 源和 `omnifunc`——支持作用域内的局部变量、缓冲区中的定义（包括记录构造器和访问器）、(chezscheme) 以及 REPL 绑定。
+- **补全**：blink.cmp 源和 `omnifunc`——支持作用域内的局部变量、REPL 绑定、缓冲区中的定义（包括记录构造器和访问器）、项目中其他已打开缓冲区的定义以及 (chezscheme)。在 REPL 窗口中（blink.cmp 不在 prompt 缓冲区中运行）使用 Neovim 自带的补全，输入时自动弹出，`<Tab>`/`<S-Tab>` 切换候选，和 Chez 自带 REPL 的 Tab 补全类似。
 - **文档**：`K` 可显示 1585 个标识符的签名，以及来自《Chez Scheme 用户指南》和 R6RS 报告的文档；支持缓冲区定义及其注释、REPL 绑定、签名帮助和在线指南链接。
 - **导航**：`gd` 可通过缓冲区、REPL 源位置和 ripgrep 跳转。
 - **宏展开**：在浮动窗口中执行 `expand` 和 `expand/optimize`（cp0）。
@@ -40,7 +40,6 @@ return {
       sources = {
         per_filetype = {
           scheme = { inherit_defaults = true, "chez" },
-          chez_repl = { "chez", "buffer" },
         },
         providers = {
           chez = { name = "Chez", module = "chez.complete.blink" },

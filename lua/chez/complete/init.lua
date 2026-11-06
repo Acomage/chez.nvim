@@ -114,71 +114,168 @@ function M.locals(buf, row, col)
   return names
 end
 
----All candidates for `buf` at (row, col); `repl_names` are names bound in the
----running REPL (may be nil).
+--------------------------------------------------------------------------------
+-- definitions in the project's open buffers
+--------------------------------------------------------------------------------
+
+local def_cache = {} ---@type table<integer, { tick: integer, defs: chez.Definition[] }>
+
+---Definitions of a buffer, cached until it changes.
+---@return chez.Definition[]
+function M.buffer_definitions(buf)
+  local tick = vim.api.nvim_buf_get_changedtick(buf)
+  local c = def_cache[buf]
+  if not c or c.tick ~= tick then
+    c = { tick = tick, defs = doc.definitions(buf) }
+    def_cache[buf] = c
+  end
+  return c.defs
+end
+
+---Loaded Chez buffers of the same project as `buf` (excluding `buf`).
+---@return integer[]
+function M.project_buffers(buf)
+  local ok, repl = pcall(require, "chez.repl")
+  if not ok then
+    return {}
+  end
+  local root = repl.root_for(buf)
+  local out = {}
+  for _, b in ipairs(vim.api.nvim_list_bufs()) do
+    if b ~= buf and vim.api.nvim_buf_is_loaded(b) and vim.bo[b].filetype == "scheme"
+      and require("chez.detect").is_chez(b) and repl.root_for(b) == root then
+      out[#out + 1] = b
+    end
+  end
+  return out
+end
+
+---All candidates for `buf` at (row, col), most specific source first:
+---local bindings, REPL bindings, buffer definitions, definitions in other
+---open buffers of the project, (chezscheme). `repl_names` may be nil.
 ---@return chez.Candidate[]
 function M.candidates(buf, row, col, repl_names)
-  local seen = {}
+  local index = {}
   local out = {}
   local function add(c)
-    if not seen[c.name] then
-      seen[c.name] = true
+    local prev = index[c.name]
+    if not prev then
+      index[c.name] = c
       out[#out + 1] = c
+    elseif not prev.sig and c.sig then
+      prev.sig = c.sig -- e.g. a REPL binding also defined in a buffer
     end
   end
   for _, name in ipairs(M.locals(buf, row, col)) do
     add({ name = name, kind = "local", source = "local" })
   end
-  for _, d in ipairs(doc.definitions(buf)) do
-    add({ name = d.name, kind = d.kind, source = "buffer", sig = d.sig })
+  for _, r in ipairs(repl_names or {}) do
+    add({ name = r.name, kind = r.kind, source = "repl" })
+  end
+  if vim.bo[buf].filetype ~= "chez_repl" then
+    for _, d in ipairs(M.buffer_definitions(buf)) do
+      add({ name = d.name, kind = d.kind, source = "buffer", sig = d.sig })
+    end
+  end
+  for _, b in ipairs(M.project_buffers(buf)) do
+    for _, d in ipairs(M.buffer_definitions(b)) do
+      add({ name = d.name, kind = d.kind, source = "project", sig = d.sig })
+    end
   end
   for _, b in ipairs(doc.builtin_list()) do
     add({ name = b.name, kind = b.kind, source = "builtin" })
-  end
-  for _, r in ipairs(repl_names or {}) do
-    add({ name = r.name, kind = r.kind, source = "repl" })
   end
   return out
 end
 
 --------------------------------------------------------------------------------
--- REPL names (cached per session until the next evaluation)
+-- REPL names (refreshed in the background after every evaluation)
 --------------------------------------------------------------------------------
 
 local repl_cache = setmetatable({}, { __mode = "k" })
 
----Names bound in the REPL that are not builtins. Calls `cb(names)`; uses the
----cache when it is fresh, otherwise asks the REPL (nil when not running).
+local function fetch(s, c, cb)
+  if c.fetching then
+    if cb then
+      table.insert(c.waiting, cb)
+    end
+    return
+  end
+  c.fetching = true
+  c.waiting = cb and { cb } or {}
+  s:request("complete", { prefix = "", limit = 100000 }, function(resp)
+    c.fetching = false
+    if resp.ok then
+      local builtins = doc.builtins()
+      local names = {}
+      for _, cand in ipairs(resp.candidates or {}) do
+        if not builtins[cand.name] then
+          names[#names + 1] = cand
+        end
+      end
+      c.names, c.valid = names, true
+    end
+    local waiting = c.waiting
+    c.waiting = {}
+    for _, w in ipairs(waiting) do
+      w(c.names)
+    end
+  end)
+end
+
+local function cache_for(s)
+  local c = repl_cache[s]
+  if c then
+    return c
+  end
+  c = { waiting = {} }
+  repl_cache[s] = c
+  s:on("response", function(_, req)
+    if req and (req.op == "eval" or req.op == "load") then
+      c.valid = false
+      -- refresh right away so synchronous users (omnifunc) see new names
+      vim.schedule(function()
+        if s:alive() and not c.valid then
+          fetch(s, c)
+        end
+      end)
+    end
+  end)
+  s:on("exit", function()
+    c.valid, c.names = false, nil
+  end)
+  return c
+end
+
+---Names bound in the REPL that are not builtins. Calls `cb(names)` with the
+---cached names when fresh, otherwise after asking the REPL; nil when no REPL
+---is running.
 function M.repl_names(buf, cb)
   local ok, repl = pcall(require, "chez.repl")
   local s = ok and repl.get(buf)
   if not s or not s:alive() then
     return cb(nil)
   end
-  local c = repl_cache[s]
-  if c and c.valid then
+  local c = cache_for(s)
+  if c.valid then
     return cb(c.names)
   end
-  if not c then
-    c = {}
-    repl_cache[s] = c
-    s:on("response", function(_, req)
-      if req and (req.op == "eval" or req.op == "load") then
-        c.valid = false
-      end
-    end)
+  fetch(s, c, cb)
+end
+
+---Cached REPL names without waiting (possibly slightly stale); starts a
+---refresh when needed.
+function M.repl_names_now(buf)
+  local ok, repl = pcall(require, "chez.repl")
+  local s = ok and repl.get(buf)
+  if not s or not s:alive() then
+    return nil
   end
-  s:request("complete", { prefix = "", limit = 100000 }, function(resp)
-    local builtins = doc.builtins()
-    local names = {}
-    for _, cand in ipairs(resp.candidates or {}) do
-      if not builtins[cand.name] then
-        names[#names + 1] = cand
-      end
-    end
-    c.names, c.valid = names, resp.ok
-    cb(names)
-  end)
+  local c = cache_for(s)
+  if not c.valid then
+    fetch(s, c)
+  end
+  return c.names
 end
 
 --------------------------------------------------------------------------------
@@ -187,23 +284,42 @@ end
 
 local omni_start
 
----'omnifunc' implementation (synchronous; uses cached REPL names only).
+local function info(c)
+  if c.sig then
+    return c.sig
+  end
+  if c.source == "builtin" then
+    local e = doc.entry(c.name)
+    if e and e.sigs and #e.sigs > 0 then
+      return table.concat(e.sigs, "\n")
+    end
+  end
+  return ""
+end
+
+---'omnifunc' implementation (synchronous; REPL names come from the cache,
+---which is refreshed after every evaluation).
 function M.omnifunc(findstart, base)
   local buf = vim.api.nvim_get_current_buf()
   local pos = vim.api.nvim_win_get_cursor(0)
   if findstart == 1 then
-    local _, start = M.prefix(vim.api.nvim_get_current_line(), pos[2])
+    local prefix, start = M.prefix(vim.api.nvim_get_current_line(), pos[2])
     omni_start = start
+    if prefix == "" and vim.bo[buf].filetype == "chez_repl" then
+      return -3 -- nothing typed yet: no menu
+    end
     return start
   end
-  local repl_names
-  M.repl_names(buf, function(names)
-    repl_names = names
-  end)
   local items = {}
-  for _, c in ipairs(M.candidates(buf, pos[1] - 1, omni_start or pos[2], repl_names)) do
+  for _, c in ipairs(M.candidates(buf, pos[1] - 1, omni_start or pos[2], M.repl_names_now(buf))) do
     if vim.startswith(c.name, base) then
-      items[#items + 1] = { word = c.name, kind = c.kind:sub(1, 1), menu = "[" .. c.source .. "]", info = c.sig or "" }
+      items[#items + 1] = {
+        word = c.name,
+        kind = c.kind:sub(1, 1),
+        menu = "[" .. c.source .. "]",
+        info = info(c),
+        dup = 0,
+      }
     end
   end
   table.sort(items, function(a, b)

@@ -52,6 +52,9 @@ local defaults = {
     -- After evaluating a `(library (name) ...)` form, import it into the REPL.
     auto_import = true,
     history_size = 500,
+    -- Show the completion menu while typing in the REPL window (Neovim 0.12
+    -- 'autocomplete'); <Tab> completes either way.
+    autocomplete = true,
   },
   diagnostics = {
     -- Check buffers with a separate Chez process (reads and expands the code,

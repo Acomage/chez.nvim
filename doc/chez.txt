@@ -142,10 +142,12 @@ session keeps its state.
 ==============================================================================
 6. COMPLETION                                               *chez-completion*
 
-Candidates: local bindings in scope (lambda parameters, let/do bindings,
-named-let names), definitions in the buffer (including record constructors,
-predicates and accessors), every identifier of (chezscheme), and top-level
-bindings of the running REPL.
+Candidates, most specific first: local bindings in scope (lambda
+parameters, let/do bindings, named-let names), top-level bindings of the
+running REPL (refreshed after every evaluation), definitions in the buffer
+(including record constructors, predicates and accessors), definitions in the
+project's other open Chez buffers (`[project]`, also when not evaluated yet),
+and every identifier of (chezscheme).
 
 blink.cmp: >lua
   {
@@ -154,7 +156,6 @@ blink.cmp: >lua
       sources = {
         per_filetype = {
           scheme = { inherit_defaults = true, "chez" },
-          chez_repl = { "chez", "buffer" },
         },
         providers = {
           chez = { name = "Chez", module = "chez.complete.blink" },
@@ -167,6 +168,15 @@ Scheme identifiers contain characters like `?`, `!`, `>`, `/`; the source
 computes the identifier prefix itself and returns text edits covering it.
 
 Without blink.cmp, 'omnifunc' is set (|i_CTRL-X_CTRL-O|).
+
+                                                      *chez-repl-completion*
+In the REPL window blink.cmp does not run (it disables itself in prompt
+buffers), so Neovim's completion is used with the same candidates: the menu
+opens while typing ('autocomplete', Neovim 0.12; `repl.autocomplete`),
+<Tab>/<S-Tab> open the menu and select candidates, <CR> accepts the selected
+candidate (or evaluates when none is selected), <Up>/<Down> move in the menu
+when it is open and through the history otherwise. Signatures are shown in
+the info popup.
 
 ==============================================================================
 7. DOCUMENTATION AND NAVIGATION                                  *chez-docs*
@@ -267,6 +277,7 @@ Defaults: >lua
       continuation_prompt = ".. ",
       auto_import = true,
       history_size = 500,
+      autocomplete = true,  -- completion menu while typing in the REPL
     },
     diagnostics = {
       enabled = true,

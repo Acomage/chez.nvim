@@ -72,6 +72,55 @@ local function history_move(s, delta)
   vim.api.nvim_win_set_cursor(0, { n, #prompt + #first })
 end
 
+---History navigation in the current REPL buffer.
+function M.history(delta)
+  local buf = vim.api.nvim_get_current_buf()
+  for s, st in pairs(states) do
+    if st.buf == buf then
+      history_move(s, delta)
+      return
+    end
+  end
+end
+
+---Completion in the REPL buffer: blink.cmp does not run in prompt buffers,
+---so Neovim's own completion is used with chez.nvim's 'omnifunc' (REPL
+---bindings, project definitions, builtins), opened automatically while
+---typing when 'autocomplete' is available and `repl.autocomplete` is set.
+---@param buf integer
+function M.setup_completion(buf)
+  local function set(name, value)
+    pcall(vim.api.nvim_set_option_value, name, value, { scope = "local", buf = buf })
+  end
+  vim.bo[buf].omnifunc = "v:lua.require'chez.complete'.omnifunc"
+  vim.bo[buf].complete = "o"
+  set("completeopt", "menuone,noselect,popup")
+  if config.repl.autocomplete then
+    set("autocomplete", true)
+  end
+  local function map(lhs, rhs, desc)
+    vim.keymap.set("i", lhs, rhs, { buffer = buf, desc = desc, expr = true })
+  end
+  map("<Tab>", function()
+    if vim.fn.pumvisible() == 1 then
+      return "<C-n>"
+    end
+    local col = vim.api.nvim_win_get_cursor(0)[2]
+    local prefix = require("chez.complete").prefix(vim.api.nvim_get_current_line(), col)
+    return prefix ~= "" and "<C-x><C-o>" or "<Tab>"
+  end, "Complete / next candidate")
+  map("<S-Tab>", function()
+    return vim.fn.pumvisible() == 1 and "<C-p>" or "<S-Tab>"
+  end, "Previous candidate")
+  map("<CR>", function()
+    if vim.fn.pumvisible() == 1 then
+      -- accept the selected candidate; otherwise close the menu and evaluate
+      return vim.fn.complete_info({ "selected" }).selected ~= -1 and "<C-y>" or "<C-e><CR>"
+    end
+    return "<CR>"
+  end, "Accept candidate / evaluate")
+end
+
 ---The REPL buffer of a session (created on demand).
 ---@param s chez.Session
 ---@return integer
@@ -100,15 +149,20 @@ function M.buf(s)
   vim.fn.prompt_setinterrupt(buf, function()
     s:interrupt()
   end)
-  local function map(mode, lhs, rhs, desc)
-    vim.keymap.set(mode, lhs, rhs, { buffer = buf, desc = desc })
+  local function map(mode, lhs, rhs, desc, opts)
+    vim.keymap.set(mode, lhs, rhs, vim.tbl_extend("force", { buffer = buf, desc = desc }, opts or {}))
   end
+  local function pum()
+    return vim.fn.pumvisible() == 1
+  end
+  -- <Up>/<Down>: completion menu when open, history otherwise
   map("i", "<Up>", function()
-    history_move(s, -1)
-  end, "History back")
+    return pum() and "<C-p>" or "<Cmd>lua require('chez.repl.ui').history(-1)<CR>"
+  end, "History back", { expr = true })
   map("i", "<Down>", function()
-    history_move(s, 1)
-  end, "History forward")
+    return pum() and "<C-n>" or "<Cmd>lua require('chez.repl.ui').history(1)<CR>"
+  end, "History forward", { expr = true })
+  M.setup_completion(buf)
   map({ "n", "i" }, "<C-l>", function()
     M.clear(s)
   end, "Clear REPL buffer")

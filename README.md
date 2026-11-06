@@ -15,9 +15,11 @@ results, completion, documentation, macro expansion and diagnostics.
   `(read)` answered from Neovim, interrupt with SIGINT, backtraces to
   quickfix, diagnostics at the failing call, auto-import of evaluated
   libraries, a prompt buffer with history.
-- **Completion**: blink.cmp source and `omnifunc` — locals in scope, buffer
-  definitions (incl. record constructors/accessors), (chezscheme), REPL
-  bindings.
+- **Completion**: blink.cmp source and `omnifunc` — locals in scope, REPL
+  bindings, buffer definitions (incl. record constructors/accessors),
+  definitions in the project's other open buffers, (chezscheme). In the REPL
+  window (where blink.cmp does not run) Neovim's completion opens while
+  typing; `<Tab>`/`<S-Tab>` cycle like in Chez's own REPL.
 - **Documentation**: `K` with signatures and text from the Chez Scheme
   User's Guide and the R6RS report for 1585 identifiers, buffer definitions
   with their comments, REPL bindings; signature help; links to the online
@@ -56,7 +58,6 @@ return {
       sources = {
         per_filetype = {
           scheme = { inherit_defaults = true, "chez" },
-          chez_repl = { "chez", "buffer" },
         },
         providers = {
           chez = { name = "Chez", module = "chez.complete.blink" },
