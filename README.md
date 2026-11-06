@@ -24,8 +24,11 @@ results, completion, documentation, macro expansion and diagnostics.
   guide.
 - **Navigation**: `gd` via buffer, REPL source locations and ripgrep.
 - **Macro expansion**: `expand` and `expand/optimize` (cp0) in a float.
-- **Diagnostics**: a checker process expands (without running) the file and
-  reports syntax errors and unbound identifiers.
+- **Diagnostics**: a checker process expands (without running) the buffer —
+  on open, on save and after edits — and reports syntax errors and unbound
+  identifiers.
+- **Brackets**: `(`/`)` pairing and skipping decided by the balance of the
+  whole form, not the current line (fixes lost closers with autopair plugins).
 
 ## Requirements
 

@@ -100,6 +100,8 @@ end
 ---@field str boolean     inside a string literal
 ---@field bar boolean     inside a |symbol|
 ---@field block integer   nesting depth of #| |# comments
+---@field extra integer   closing brackets without an opening one
+---@field comment boolean the fed text ended inside a ; comment
 
 local function new_frame(ocol, orow, data)
   return { ocol = ocol, orow = orow, data = data, n = 0, skip = 0 }
@@ -107,7 +109,7 @@ end
 
 ---@return chez.indent.State
 function M.new_state()
-  return { stack = { new_frame(-1, -1, false) }, str = false, bar = false, block = 0 }
+  return { stack = { new_frame(-1, -1, false) }, str = false, bar = false, block = 0, extra = 0, comment = false }
 end
 
 local function copy_state(s)
@@ -119,7 +121,7 @@ local function copy_state(s)
       pending = f.pending, pq = f.pq, skip = f.skip,
     }
   end
-  return { stack = stack, str = s.str, bar = s.bar, block = s.block }
+  return { stack = stack, str = s.str, bar = s.bar, block = s.block, extra = s.extra, comment = false }
 end
 M.copy_state = copy_state
 
@@ -166,6 +168,7 @@ function M.feed(s, line, row)
     return vim.fn.strdisplaywidth(line:sub(1, i - 1))
   end
   local stack = s.stack
+  s.comment = false
   local i = 1
   while i <= len do
     local c = byte(line, i)
@@ -199,6 +202,7 @@ function M.feed(s, line, row)
     elseif is_ws(c) then
       i = i + 1
     elseif c == B.semi then
+      s.comment = true
       break
     else
       local f = stack[#stack]
@@ -217,6 +221,8 @@ function M.feed(s, line, row)
       elseif c == B.rparen or c == B.rbrack then
         if #stack > 1 then
           stack[#stack] = nil
+        else
+          s.extra = s.extra + 1
         end
         i = i + 1
       elseif c == B.dquote then

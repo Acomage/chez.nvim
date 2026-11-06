@@ -28,6 +28,9 @@ local defaults = {
   editing = {
     -- Insert ' and ` literally (prevents autopair plugins pairing them).
     literal_quotes = true,
+    -- Handle ( [ ) ] using the bracket balance of the whole top-level form
+    -- instead of the current line (overrides autopair plugins for these keys).
+    smart_brackets = true,
   },
   repl = {
     -- Chez executable and extra arguments; chez.nvim appends
@@ -54,7 +57,9 @@ local defaults = {
     -- Check buffers with a separate Chez process (reads and expands the code,
     -- does not run it): syntax errors, unbound identifiers.
     enabled = true,
-    events = { "BufWritePost" },
+    -- InsertLeave/TextChanged check unsaved changes (debounced)
+    events = { "BufWritePost", "InsertLeave", "TextChanged" },
+    debounce = 500,
     -- also check when a buffer is opened
     on_attach = true,
     timeout = 10000,

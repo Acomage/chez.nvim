@@ -150,11 +150,22 @@ function M.attach(buf)
     return
   end
   local group = vim.api.nvim_create_augroup("chez.diagnostics." .. buf, { clear = true })
+  local timer = assert(vim.uv.new_timer())
   vim.api.nvim_create_autocmd(cfg.events, {
     group = group,
     buffer = buf,
-    callback = function()
-      M.check(buf)
+    callback = function(ev)
+      timer:stop()
+      if ev.event == "BufWritePost" or (cfg.debounce or 0) <= 0 then
+        M.check(buf)
+        return
+      end
+      timer:start(cfg.debounce, 0, vim.schedule_wrap(function()
+        -- wait until Insert mode is left
+        if vim.api.nvim_buf_is_valid(buf) and vim.fn.mode():sub(1, 1) ~= "i" then
+          M.check(buf)
+        end
+      end))
     end,
   })
   vim.api.nvim_create_autocmd("BufWipeout", {
@@ -162,6 +173,10 @@ function M.attach(buf)
     buffer = buf,
     callback = function()
       vim.diagnostic.reset(ns, buf)
+      timer:stop()
+      if not timer:is_closing() then
+        timer:close()
+      end
       pcall(vim.api.nvim_del_augroup_by_id, group)
     end,
   })

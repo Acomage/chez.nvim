@@ -92,6 +92,16 @@ conform.nvim: >lua
   formatters_by_ft = { scheme = { "chez_indent" } },
 <
 
+                                                              *chez-brackets*
+Brackets: with `editing.smart_brackets`, typing `(` or `[` inserts a pair
+(unless the next character is part of a word), and typing `)` or `]` jumps
+over the same character only when the surrounding top-level form has no
+missing closers; otherwise it is inserted. The decision considers the whole
+form across lines, strings, comments and `#\(` — autopair plugins (e.g.
+mini.pairs in LazyVim) only look at the current line, which loses a closer
+when a line holds just the `)` of a definition. These buffer-local mappings
+take precedence over such plugins.
+
 ==============================================================================
 5. REPL AND EVALUATION                                           *chez-repl*
 
@@ -178,7 +188,9 @@ so macros defined there are used.
 ==============================================================================
 8. DIAGNOSTICS                                             *chez-diagnostics*
 
-On open and on save (`diagnostics.events`), a separate Chez process reads the
+On open, on save and after edits (`diagnostics.events`: leaving Insert mode
+and Normal mode changes, debounced by `diagnostics.debounce` ms; unsaved
+changes are checked too), a separate Chez process reads the
 buffer, compiles library forms, processes imports and expands the remaining
 top-level forms together without running them. It reports reader and syntax
 errors with their positions, errors in libraries (including references to
@@ -239,7 +251,10 @@ Defaults: >lua
     },
     root_markers = { ".chez-project", ".git", "Akku.manifest" },
     indent = { enabled = true, rules = {}, def_prefix = true },
-    editing = { literal_quotes = true },  -- don't auto-pair ' and `
+    editing = {
+      literal_quotes = true,  -- don't auto-pair ' and `
+      smart_brackets = true,  -- see |chez-brackets|
+    },
     repl = {
       cmd = { "chez", "-q" },
       libdirs = { ".", "src", "lib" },
@@ -255,7 +270,8 @@ Defaults: >lua
     },
     diagnostics = {
       enabled = true,
-      events = { "BufWritePost" },
+      events = { "BufWritePost", "InsertLeave", "TextChanged" },
+      debounce = 500,
       on_attach = true,
       timeout = 10000,
     },
