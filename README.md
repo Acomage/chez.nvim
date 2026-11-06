@@ -1,5 +1,7 @@
 # chez.nvim
 
+English | [简体中文](README.zh-CN.md)
+
 Chez Scheme support for Neovim: indentation, highlighting, a REPL with inline
 results, completion, documentation, macro expansion and diagnostics.
 
