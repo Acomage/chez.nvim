@@ -39,7 +39,7 @@ results, completion, documentation, macro expansion and diagnostics.
 ```lua
 return {
   {
-    "YOUR_NAME/chez.nvim",
+    "Acomage/chez.nvim",
     ft = "scheme",
     opts = {},
   },
