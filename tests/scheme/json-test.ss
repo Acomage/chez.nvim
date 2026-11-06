@@ -1,0 +1,43 @@
+(import (chezscheme) (chez-nvim json))
+
+(define failures 0)
+(define-syntax check
+  (syntax-rules ()
+    [(_ expr expected)
+     (let ([v expr] [e expected])
+       (unless (equal? v e)
+         (set! failures (+ failures 1))
+         (printf "FAIL: ~s\n  got      ~s\n  expected ~s\n" 'expr v e)))]))
+
+(check (json->string 1) "1")
+(check (json->string -2.5) "-2.5")
+(check (json->string 0.5) "0.5")
+(check (json->string 1/2) "0.5")
+(check (json->string +inf.0) "null")
+(check (json->string "a\"b\\c\nd\x1;") "\"a\\\"b\\\\c\\nd\\u0001\"")
+(check (json->string "λ") "\"λ\"")
+(check (json->string #t) "true")
+(check (json->string '()) "[]")
+(check (json->string '#(1 "x")) "[1,\"x\"]")
+(check (json->string '(1 2)) "[1,2]")
+(check (json->string '((a . 1) (b . #f))) "{\"a\":1,\"b\":false}")
+(check (json->string json-empty-object) "{}")
+(check (json->string 'null) "null")
+
+(check (string->json "{\"id\": 3, \"op\": \"eval\", \"xs\": [1, 2.5, true, null]}")
+       '((id . 3) (op . "eval") (xs . #(1 2.5 #t null))))
+(check (string->json "\"\\u00e9\\ud83d\\ude00\\n\"") "é😀\n")
+(check (string->json "  [ ]") '#())
+(check (string->json "{}") '())
+(check (string->json "-12e2") -1200.0)
+(check (guard (c [#t 'error]) (string->json "[1,")) 'error)
+
+(let ([s "{\"a\":[1,{\"b\":\"c\"}],\"d\":\"\\u001e\"}"])
+  (check (json->string (let ([x (string->json s)])
+                         ;; arrays come back as vectors, objects as alists
+                         x))
+         s))
+
+(if (= failures 0)
+    (printf "json: all tests passed\n")
+    (begin (printf "json: ~a failure(s)\n" failures) (exit 1)))

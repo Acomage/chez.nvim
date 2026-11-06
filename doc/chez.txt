@@ -1,0 +1,284 @@
+*chez.txt*  Chez Scheme support for Neovim
+
+==============================================================================
+CONTENTS                                                        *chez.nvim*
+
+  1. Introduction ......................................... |chez-intro|
+  2. Setup ................................................ |chez-setup|
+  3. File detection ....................................... |chez-detect|
+  4. Indentation and formatting ........................... |chez-indent|
+  5. REPL and evaluation .................................. |chez-repl|
+  6. Completion ........................................... |chez-completion|
+  7. Documentation and navigation ......................... |chez-docs|
+  8. Diagnostics .......................................... |chez-diagnostics|
+  9. Commands ............................................. |chez-commands|
+ 10. Keymaps .............................................. |chez-keymaps|
+ 11. Configuration ........................................ |chez-config|
+ 12. Highlights ........................................... |chez-highlights|
+
+==============================================================================
+1. INTRODUCTION                                                 *chez-intro*
+
+chez.nvim adds Chez Scheme specific editing support on top of Neovim's
+`scheme` filetype:
+
+- Lisp indentation that works on incomplete code, with Chez specific rules.
+- Tree-sitter highlighting of Chez syntax and all (chezscheme) procedures.
+- A REPL per project: evaluate forms, see results inline, interrupt loops,
+  answer `(read)` from Neovim, inspect backtraces.
+- Completion (blink.cmp source and 'omnifunc'), hover documentation built from
+  the Chez Scheme User's Guide and the R6RS report, signature help.
+- Macro expansion (`expand` and `expand/optimize`), tracing, go to definition.
+- Diagnostics from a checker process that expands (but does not run) the code.
+
+Requirements: Neovim 0.11+, Chez Scheme (`chez` or `scheme` executable), the
+tree-sitter `scheme` parser (`:TSInstall scheme`). Optional: blink.cmp,
+which-key.nvim, conform.nvim, ripgrep.
+
+==============================================================================
+2. SETUP                                                        *chez-setup*
+
+With lazy.nvim: >lua
+  {
+    "YOUR_NAME/chez.nvim",
+    ft = "scheme",
+    opts = {},
+  }
+<
+nvim-paredit can re-indent with chez.nvim's rules after slurp/barf: >lua
+  {
+    "julienvincent/nvim-paredit",
+    ft = "scheme",
+    opts = function()
+      return { indent = { enabled = true, indentor = require("chez.paredit").indentor } }
+    end,
+  }
+<
+`setup()` is optional; without it the defaults are used. Check the
+installation with `:checkhealth chez`.
+
+==============================================================================
+3. FILE DETECTION                                              *chez-detect*
+
+`*.ss`, `*.sls`, `*.sps` and `*.sch` files get the `scheme` filetype (a `*.sls`
+file that looks like YAML stays `salt`). A `scheme` buffer is treated as Chez
+Scheme when:
+
+- its extension is in `detect.extensions`, or
+- `#!chezscheme` appears in its first 30 lines, or
+- it is a `*.scm` file and `detect.scm` is true or the project root contains
+  one of `detect.markers` (`.chez-project` by default).
+
+Set `b:chez` to `true`/`false` to override detection.
+
+==============================================================================
+4. INDENTATION AND FORMATTING                                  *chez-indent*
+
+'indentexpr' is set to a Lisp indenter that follows the usual Scheme style:
+
+- forms with a rule (e.g. `lambda`, `let`, `define`, `syntax-case`, `library`)
+  indent their distinguished arguments by 4 and their body by 2;
+- procedure calls align arguments with the first argument on the operator's
+  line, or with the operator;
+- quoted lists and vectors align with their first element.
+
+Rules are numbers of distinguished arguments; symbols starting with `def` use
+0. Add your own with `indent.rules`: >lua
+  opts = { indent = { rules = { ["my-when"] = 1, ["with-foo"] = 1 } } }
+<
+`=` re-indents, `:Chez format` re-indents the buffer or a range. For
+conform.nvim: >lua
+  formatters = { chez_indent = require("chez.format").conform },
+  formatters_by_ft = { scheme = { "chez_indent" } },
+<
+
+==============================================================================
+5. REPL AND EVALUATION                                           *chez-repl*
+
+A Chez process is started per project root (see `root_markers`) the first
+time code is evaluated. It runs a small bridge (`scheme/server.ss`) that
+evaluates code in `(interaction-environment)` and reports values, output and
+errors to Neovim. Directories in `repl.libdirs` that exist under the root are
+added to `library-directories`.
+
+Evaluation results appear as virtual text after the form and in the REPL
+window. Program output (stdout/stderr, `trace`) appears in the REPL window as
+`; ` lines. When an evaluation reads from `(current-input-port)`, Neovim asks
+for the input with |vim.ui.input()|; cancel to send end-of-file.
+
+Errors put a diagnostic at the failing location when it is known: reader and
+syntax errors carry a position, runtime errors a backtrace. The backtrace of
+the last error can be sent to the quickfix list.
+
+What gets evaluated:
+- form: the innermost list at the cursor (with its quote prefix).
+- top-level form: the top-level form at the cursor. Inside a
+  `(library ...)`, the body form at the cursor is evaluated instead of the
+  whole library; on the library's header lines the whole library is
+  evaluated. A datum comment `#;form` evaluates `form`.
+- buffer: the buffer text (unsaved changes included).
+- file: `(load "file")` after saving.
+
+When a `(library (name) ...)` form is evaluated and `repl.auto_import` is set,
+`(import (name))` follows so its exports can be used in the REPL.
+
+The REPL window is a prompt buffer: type expressions on the last line, <CR>
+evaluates when the input is complete (otherwise a continuation prompt is
+shown), <Up>/<Down> walk the history, <C-c> interrupts, <C-l> clears.
+
+Interrupting sends SIGINT to the process; the running evaluation stops and the
+session keeps its state.
+
+==============================================================================
+6. COMPLETION                                               *chez-completion*
+
+Candidates: local bindings in scope (lambda parameters, let/do bindings,
+named-let names), definitions in the buffer (including record constructors,
+predicates and accessors), every identifier of (chezscheme), and top-level
+bindings of the running REPL.
+
+blink.cmp: >lua
+  {
+    "saghen/blink.cmp",
+    opts = {
+      sources = {
+        per_filetype = {
+          scheme = { inherit_defaults = true, "chez" },
+          chez_repl = { "chez", "buffer" },
+        },
+        providers = {
+          chez = { name = "Chez", module = "chez.complete.blink" },
+        },
+      },
+    },
+  }
+<
+Scheme identifiers contain characters like `?`, `!`, `>`, `/`; the source
+computes the identifier prefix itself and returns text edits covering it.
+
+Without blink.cmp, 'omnifunc' is set (|i_CTRL-X_CTRL-O|).
+
+==============================================================================
+7. DOCUMENTATION AND NAVIGATION                                  *chez-docs*
+
+`K` shows documentation for the identifier at the cursor: definitions in the
+buffer (with their leading `;` comments), then (chezscheme) identifiers
+(signatures and text from the Chez Scheme User's Guide or the R6RS report,
+arity, a link to the online guide), then bindings of the running REPL.
+
+`<C-k>` in Insert mode shows the signature of the surrounding call.
+
+`gd` goes to the definition: in the buffer, then the source location of
+procedures defined in the REPL, then a project-wide ripgrep search.
+
+Macro expansion of the form at the cursor: `expand` shows the core form;
+`expand/optimize` also runs the source optimizer (cp0). Both need the REPL,
+so macros defined there are used.
+
+==============================================================================
+8. DIAGNOSTICS                                             *chez-diagnostics*
+
+On open and on save (`diagnostics.events`), a separate Chez process reads the
+buffer, compiles library forms, processes imports and expands the remaining
+top-level forms together without running them. It reports reader and syntax
+errors with their positions, errors in libraries (including references to
+unbound identifiers) and unbound variables in other code.
+
+Code is not executed, but macros are expanded, so macro transformers in the
+file do run.
+
+==============================================================================
+9. COMMANDS                                                  *chez-commands*
+
+`:Chez {subcommand}`
+
+  format          re-indent the buffer, or [range]
+  eval            evaluate [range], or the top-level form at the cursor
+  load            load the current file
+  start           start the REPL
+  restart         restart the REPL
+  stop            stop the REPL
+  interrupt       interrupt the running evaluation
+  repl            toggle the REPL window
+  clear           clear inline results
+  result          show the last result in a float
+  backtrace       backtrace of the last error in the quickfix list
+  check           run diagnostics now
+  expand          expand the form at the cursor
+  optimize        expand/optimize the form at the cursor
+  trace           toggle `trace` of the procedure at the cursor
+
+==============================================================================
+10. KEYMAPS                                                   *chez-keymaps*
+
+Buffer-local, in Chez buffers. Change or disable (`false`) entries in
+`keymaps`; `keymaps = false` disables all.
+
+  <localleader>ee   evaluate form              <localleader>cs  start REPL
+  <localleader>er   evaluate top-level form    <localleader>cr  restart REPL
+  <localleader>ew   evaluate word              <localleader>cq  stop REPL
+  <localleader>eb   evaluate buffer            <localleader>ci  interrupt
+  <localleader>ef   load file                  <localleader>ct  toggle window
+  <localleader>E    evaluate selection (x)     <localleader>cf  focus REPL
+  <localleader>E    evaluate {motion} (n)      <localleader>mx  expand macro
+  <localleader>ev   show last result           <localleader>mo  expand/optimize
+  <localleader>ec   clear results              <localleader>tt  toggle trace
+  <localleader>eq   backtrace to quickfix      <localleader>hd  online docs
+  K                 documentation              gd               definition
+  <C-k> (insert)    signature
+
+==============================================================================
+11. CONFIGURATION                                              *chez-config*
+
+Defaults: >lua
+  require("chez").setup({
+    detect = {
+      scm = false,
+      extensions = { "ss", "sls", "sps", "sch" },
+      markers = { ".chez-project" },
+    },
+    root_markers = { ".chez-project", ".git", "Akku.manifest" },
+    indent = { enabled = true, rules = {}, def_prefix = true },
+    editing = { literal_quotes = true },  -- don't auto-pair ' and `
+    repl = {
+      cmd = { "chez", "-q" },
+      libdirs = { ".", "src", "lib" },
+      print_length = 200,
+      print_level = 30,
+      position = "right",  -- right | left | bottom | top | float
+      size = 0.4,
+      open_on_start = true,
+      prompt = "λ> ",
+      continuation_prompt = ".. ",
+      auto_import = true,
+      history_size = 500,
+    },
+    diagnostics = {
+      enabled = true,
+      events = { "BufWritePost" },
+      on_attach = true,
+      timeout = 10000,
+    },
+    inline = { enabled = true, max_width = 80, flash = true },
+    keymaps = { ... },  -- see |chez-keymaps|
+  })
+<
+Statusline: `require("chez").status()` returns "" without a REPL, "chez ◆"
+when idle, "chez ●" when evaluating and "chez ○" when stopped.
+
+==============================================================================
+12. HIGHLIGHTS                                              *chez-highlights*
+
+  ChezReplPrefix     `; ` prefix in the REPL window
+  ChezReplOutput     program output
+  ChezReplError      errors
+  ChezReplWarning    warnings, interrupts
+  ChezReplInfo       echoed code, backtraces, notes
+  ChezInlineResult   inline result
+  ChezInlineOk       inline result without values
+  ChezInlineError    inline error
+  ChezInlineWarning  inline interrupt
+  ChezInlinePending  evaluation in progress
+  ChezEvalFlash      flash of the evaluated region
+
+ vim:tw=78:ts=8:ft=help:norl:
