@@ -139,9 +139,14 @@ errors to Neovim. Directories in `repl.libdirs` that exist under the root are
 added to `library-directories`.
 
 Evaluation results appear as virtual text after the form and in the REPL
-window. Program output (stdout/stderr, `trace`) appears in the REPL window as
-`; ` lines. When an evaluation reads from `(current-input-port)`, Neovim asks
-for the input with |vim.ui.input()|; cancel to send end-of-file.
+window. With 'wrap' set in the buffer's window (`inline.position = "auto"`),
+the virtual text is part of the line ("inline") and long results, errors and
+output wrap with it; otherwise it is put after the line ("eol") and truncated
+to `inline.max_width`.
+
+Program output (stdout/stderr, `trace`) appears in the REPL window as `; `
+lines. When an evaluation reads from `(current-input-port)`, Neovim asks for
+the input with |vim.ui.input()|; cancel to send end-of-file.
 
 Errors put a diagnostic at the failing location when it is known: reader and
 syntax errors carry a position, runtime errors a backtrace. The backtrace of
@@ -369,7 +374,13 @@ Defaults: >lua
       timeout = 10000,
     },
     eval_blocks = { on_save = false, timeout = 10000 },  -- |chez-eval-blocks|
-    inline = { enabled = true, max_width = 80, flash = true },
+    inline = {
+      enabled = true,
+      position = "auto",  -- inline | eol | auto, see |chez-repl|
+      max_width = 80,     -- truncation of "eol" results (display cells)
+      max_length = 2000,  -- truncation of "inline" results (characters)
+      flash = true,
+    },
     keymaps = { ... },  -- see |chez-keymaps|
   })
 <

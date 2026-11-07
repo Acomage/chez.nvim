@@ -66,8 +66,43 @@ function M.clear_range(buf, sr, er)
   end
 end
 
-local function text_opts(chunks)
-  return { virt_text = chunks, virt_text_pos = "eol", hl_mode = "combine", priority = 300 }
+---Show results as inline virtual text (wraps with 'wrap') rather than "eol"?
+local function use_inline(buf)
+  local pos = config.inline.position
+  if pos == "inline" or pos == "eol" then
+    return pos == "inline"
+  end
+  local win = vim.api.nvim_get_current_buf() == buf and vim.api.nvim_get_current_win() or vim.fn.bufwinid(buf)
+  if win == -1 then
+    return vim.go.wrap
+  end
+  return vim.wo[win].wrap
+end
+
+---Put virtual text `chunks` at the end of `row`.
+local function set_text(buf, row, chunks)
+  local opts = { virt_text = chunks, hl_mode = "combine", priority = 300 }
+  local col = 0
+  if use_inline(buf) then
+    opts.virt_text_pos = "inline"
+    col = #(vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1] or "")
+  else
+    opts.virt_text_pos = "eol"
+  end
+  return vim.api.nvim_buf_set_extmark(buf, ns_text, row, col, opts)
+end
+
+---`s` on one line, truncated for display.
+local function fit(s, inline)
+  s = s:gsub("\n", inline and " ⏎ " or "⏎")
+  if inline then
+    local max = config.inline.max_length
+    if vim.fn.strchars(s) > max then
+      return vim.fn.strcharpart(s, 0, max - 1) .. "…"
+    end
+    return s
+  end
+  return util.truncate(s, config.inline.max_width)
 end
 
 ---Mark a region as being evaluated. Returns a handle for `M.set`.
@@ -94,7 +129,7 @@ function M.start(buf, sr, sc, er, ec, opts)
   local range_id = vim.api.nvim_buf_set_extmark(buf, ns_range, sr, sc, {
     end_row = er, end_col = ec, right_gravity = false, end_right_gravity = true,
   })
-  local text_id = vim.api.nvim_buf_set_extmark(buf, ns_text, er, 0, text_opts({ { " …", "ChezInlinePending" } }))
+  local text_id = set_text(buf, er, { { " …", "ChezInlinePending" } })
   marks[buf][range_id] = text_id
   return range_id
 end
@@ -113,12 +148,12 @@ function M.set(buf, handle, resp)
     return
   end
   local row = pos[3] and pos[3].end_row or pos[1]
-  local max = config.inline.max_width
+  local inline = use_inline(buf)
   local chunks = {}
   local output = resp.output and vim.trim(resp.output) or ""
   if output ~= "" then
     -- output written by the code (only for #eval blocks; REPL output goes to the REPL window)
-    chunks[1] = { " ▷ " .. util.truncate(output:gsub("\n", "⏎"), max), "ChezInlineOutput" }
+    chunks[1] = { " ▷ " .. fit(output, inline), "ChezInlineOutput" }
   end
   local chunk
   if resp.ok then
@@ -126,18 +161,20 @@ function M.set(buf, handle, resp)
     if #values == 0 then
       chunk = { " ✓", "ChezInlineOk" }
     else
-      chunk = { " => " .. util.truncate(table.concat(values, " "):gsub("\n", " "), max), "ChezInlineResult" }
+      chunk = { " => " .. fit(table.concat(values, " "):gsub("\n", " "), inline), "ChezInlineResult" }
     end
   else
     local err = resp.error or {}
-    local msg = (err.message or "error"):gsub("\n.*", "")
+    local msg = vim.trim(err.message or "error")
+    if not inline then
+      msg = msg:gsub("\n.*", "")
+    end
     local hl = err.kind == "interrupt" and "ChezInlineWarning" or "ChezInlineError"
-    chunk = { " ✗ " .. util.truncate(msg, max), hl }
+    chunk = { " ✗ " .. fit(msg, inline), hl }
   end
   pcall(vim.api.nvim_buf_del_extmark, buf, ns_text, m[handle])
   chunks[#chunks + 1] = chunk
-  local opts = text_opts(chunks)
-  m[handle] = vim.api.nvim_buf_set_extmark(buf, ns_text, row, 0, opts)
+  m[handle] = set_text(buf, row, chunks)
 end
 
 return M

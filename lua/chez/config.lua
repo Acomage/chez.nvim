@@ -84,7 +84,14 @@ local defaults = {
   inline = {
     -- Show evaluation results as virtual text after the evaluated form.
     enabled = true,
+    -- Where results go: "inline" = at the end of the line, as part of it, so
+    -- long results wrap with 'wrap'; "eol" = after the line, never wrapped;
+    -- "auto" = "inline" when the buffer's window has 'wrap' set, else "eol".
+    position = "auto",
+    -- Results longer than this are truncated ("eol": display cells,
+    -- "inline": characters, as they wrap).
     max_width = 80,
+    max_length = 2000,
     -- Briefly highlight the evaluated region.
     flash = true,
   },
