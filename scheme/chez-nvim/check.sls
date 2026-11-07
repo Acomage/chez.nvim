@@ -127,36 +127,100 @@
             (reverse acc)
             (loop next (cons x acc))))))
 
-  (define (check-port name ip bytes)
-    (let* ([env (copy-environment (interaction-environment) #t)]
+  (define (in-blocks? x blocks)
+    (let ([p (form-pos x)])
+      (and p (exists (lambda (b) (and (>= p (car b)) (< p (cdr b)))) blocks))))
+
+  ;; Split forms into definitions and expressions; definitions of names in
+  ;; `names` (and repeated ones) are dropped: duplicate internal definitions
+  ;; would be errors in the combined body.
+  (define (split forms names)
+    (let loop ([forms forms] [defs '()] [names names] [exprs '()])
+      (if (null? forms)
+          (values (reverse defs) names (reverse exprs))
+          (let ([x (car forms)])
+            (if (definition? x)
+                (let ([n (defined-name x)])
+                  (if (and n (memq n names))
+                      (loop (cdr forms) defs names exprs)
+                      (loop (cdr forms) (cons x defs) (if n (cons n names) names) exprs)))
+                (loop (cdr forms) defs names (cons x exprs)))))))
+
+  ;; Expand body in env; returns its unbound free variables, or #f when the
+  ;; expansion failed (the error is reported).
+  (define (unbound-variables form body env)
+    (let ([result #f])
+      (attempt form
+        (lambda ()
+          (let ([expanded (expand body env)])
+            (set! result
+              (filter (lambda (s) (not (top-level-bound? s env)))
+                      (free-variables expanded))))))
+      result))
+
+  (define (report-unbound! syms . extra)
+    (for-each
+      (lambda (s)
+        (apply report! "warning" (format "variable ~a is not bound" s)
+               `(name . ,(symbol->string s)) extra))
+      syms))
+
+  ;; (import ...) clause and body forms of an annotated library form
+  (define (library-parts x)
+    (let ([d (annotation-expression x)])
+      (if (and (list? d) (>= (length d) 4) (eq? (head (cadddr d)) 'import))
+          (values (cadddr d) (cddddr d))
+          (values #f '()))))
+
+  ;; `blocks`: character ranges (start . end) of the code in #eval blocks.
+  ;; Forms in them are checked like the code the block runner evaluates: in
+  ;; the scope of the file's top-level definitions and of the internal
+  ;; definitions of its libraries. Unbound variables found only there are
+  ;; reported with (block . #t).
+  (define (check-port name ip bytes . opt)
+    (let* ([blocks (if (pair? opt) (car opt) '())]
+           [env (copy-environment (interaction-environment) #t)]
            [sfd (make-source-file-descriptor name (open-bytevector-input-port bytes))]
            [forms '()])
       (when (attempt #f (lambda () (set! forms (read-forms ip sfd))))
-        (let loop ([forms forms] [defs '()] [names '()] [exprs '()])
-          (if (null? forms)
-              (let ([body `(lambda () ,@(reverse defs) (begin ,@(reverse exprs) (void)))])
-                (attempt #f
-                  (lambda ()
-                    (let ([expanded (expand body env)])
-                      (for-each
-                        (lambda (s)
-                          (unless (top-level-bound? s env)
-                            (report! "warning"
-                                     (format "variable ~a is not bound" s)
-                                     `(name . ,(symbol->string s)))))
-                        (free-variables expanded))))))
-              (let ([x (car forms)])
-                (case (head x)
-                  [(library import top-level-program)
-                   (attempt x (lambda () (eval x env)))
-                   (loop (cdr forms) defs names exprs)]
-                  [else
-                   (if (definition? x)
-                       (let ([n (defined-name x)])
-                         ;; drop redefinitions: duplicate internal definitions
-                         ;; would be errors in the combined body
-                         (if (and n (memq n names))
-                             (loop (cdr forms) defs names exprs)
-                             (loop (cdr forms) (cons x defs) (if n (cons n names) names) exprs)))
-                       (loop (cdr forms) defs names (cons x exprs)))])))))
-      `((diagnostics . ,(list->vector (reverse diagnostics)))))))
+        (let ([block-forms (filter (lambda (x) (in-blocks? x blocks)) forms)])
+          (let loop ([forms (filter (lambda (x) (not (in-blocks? x blocks))) forms)]
+                     [others '()] [libs '()])
+            (if (null? forms)
+                (let-values ([(defs names exprs) (split (reverse others) '())])
+                  (let ([u1 (unbound-variables #f `(lambda () ,@defs (begin ,@exprs (void))) env)])
+                    (when u1 (report-unbound! u1))
+                    (unless (null? block-forms)
+                      (check-blocks block-forms (reverse libs) defs names env (or u1 '())))))
+                (let ([x (car forms)])
+                  (case (head x)
+                    [(library)
+                     (if (attempt x (lambda () (eval x env)))
+                         (loop (cdr forms) others (cons x libs))
+                         (loop (cdr forms) others libs))]
+                    [(import top-level-program)
+                     (attempt x (lambda () (eval x env)))
+                     (loop (cdr forms) others libs)]
+                    [else (loop (cdr forms) (cons x others) libs)]))))))
+      `((diagnostics . ,(list->vector (reverse diagnostics))))))
+
+  (define (check-blocks block-forms libs defs names env u1)
+    (let ([env2 (copy-environment env #t)] [ldefs '()])
+      ;; library internals: their imports at top level, their definitions in
+      ;; the body (errors in libraries were reported already)
+      (for-each
+        (lambda (lib)
+          (let-values ([(imports body) (library-parts lib)])
+            (when (and imports (guard (c [#t #f]) (eval imports env2) #t))
+              (let-values ([(ds ns _) (split body names)])
+                (set! ldefs (append ldefs ds))
+                (set! names ns)))))
+        libs)
+      (let-values ([(bdefs _ bexprs) (split block-forms names)])
+        (let ([u2 (unbound-variables (car block-forms)
+                    `(lambda () ,@ldefs ,@defs ,@bdefs (begin ,@bexprs (void)))
+                    env2)])
+          (when u2
+            (report-unbound! (filter (lambda (s) (not (memq s u1))) u2) '(block . #t)))))))
+
+)

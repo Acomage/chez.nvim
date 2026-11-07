@@ -102,6 +102,10 @@ end
 ---@field block integer   nesting depth of #| |# comments
 ---@field extra integer   closing brackets without an opening one
 ---@field comment boolean the fed text ended inside a ; comment
+---@field evalb? integer  inside a `#| #eval ... |#` block (read as code):
+---                       stack depth at its start
+---@field evalp? boolean  after a `#|` that ended its line: an #eval block if
+---                       the next non-blank line starts with `#eval`
 
 local function new_frame(ocol, orow, data)
   return { ocol = ocol, orow = orow, data = data, n = 0, skip = 0 }
@@ -121,7 +125,10 @@ local function copy_state(s)
       pending = f.pending, pq = f.pq, skip = f.skip,
     }
   end
-  return { stack = stack, str = s.str, bar = s.bar, block = s.block, extra = s.extra, comment = false }
+  return {
+    stack = stack, str = s.str, bar = s.bar, block = s.block, extra = s.extra, comment = false,
+    evalb = s.evalb, evalp = s.evalp,
+  }
 end
 M.copy_state = copy_state
 
@@ -154,6 +161,15 @@ local function elem(f, col, row, text, is_prefix, quoting)
   return true
 end
 
+---Byte index after an `#eval` tag that starts (after blanks) at byte `i`
+---of `line`, or nil.
+local function eval_tag(line, i)
+  local _, e = line:find("^%s*#eval", i)
+  if e and (e == #line or is_ws(byte(line, e + 1))) then
+    return e + 1
+  end
+end
+
 ---Feed one line (0-based `row`) into the state.
 ---`on_bracket(col, open, depth)` is called for every bracket outside strings,
 ---comments and character literals: `col` is the 0-based byte column, `depth`
@@ -174,6 +190,16 @@ function M.feed(s, line, row, on_bracket)
   local stack = s.stack
   s.comment = false
   local i = 1
+  if s.evalp then
+    local tag = eval_tag(line, 1)
+    if tag then
+      s.evalp, s.evalb, i = nil, #stack, tag
+    elseif line:find("%S") then
+      s.evalp, s.block = nil, 1 -- an ordinary block comment
+    else
+      return
+    end
+  end
   while i <= len do
     local c = byte(line, i)
     if s.block > 0 then
@@ -226,10 +252,11 @@ function M.feed(s, line, row, on_bracket)
         end
         i = i + 1
       elseif c == B.rparen or c == B.rbrack then
+        local base = s.evalb or 1
         if on_bracket then
-          on_bracket(i - 1, false, #stack - 1)
+          on_bracket(i - 1, false, #stack > base and #stack - 1 or 0)
         end
-        if #stack > 1 then
+        if #stack > base then
           stack[#stack] = nil
         else
           s.extra = s.extra + 1
@@ -248,7 +275,15 @@ function M.feed(s, line, row, on_bracket)
       elseif c == B.hash then
         local d = byte(line, i + 1)
         if d == B.bar then
-          s.block, i = s.block + 1, i + 2
+          local tag = not s.evalb and eval_tag(line, i + 2)
+          if tag then
+            -- #| #eval ... |#: the content is read as code
+            s.evalb, i = #stack, tag
+          elseif not s.evalb and not line:find("%S", i + 2) then
+            s.evalp, i = true, len + 1
+          else
+            s.block, i = s.block + 1, i + 2
+          end
         elseif d == B.semi then
           f.skip, i = f.skip + 1, i + 2
         elseif d == B.lparen or d == B.lbrack then
@@ -305,6 +340,12 @@ function M.feed(s, line, row, on_bracket)
             i = j
           end
         end
+      elseif c == B.bar and s.evalb and byte(line, i + 1) == B.hash then
+        -- end of an #eval block: drop lists left open inside it
+        for k = #stack, s.evalb + 1, -1 do
+          stack[k] = nil
+        end
+        s.evalb, i = nil, i + 2
       else
         -- symbol / number; may contain |...| segments
         local j = i
@@ -341,7 +382,7 @@ end
 ---@param s chez.indent.State
 ---@return integer
 function M.compute(s)
-  if s.str or s.bar or s.block > 0 then
+  if s.str or s.bar or s.block > 0 or s.evalp then
     return -1
   end
   local stack = s.stack

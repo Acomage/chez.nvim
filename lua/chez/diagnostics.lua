@@ -46,21 +46,62 @@ local function occurrences(buf, name)
   return out
 end
 
+local DELIM = "[%s()%[%]\"';`,]"
+
+---Positions of the identifier `name` in the code of #eval blocks (which the
+---tree-sitter tree only knows as comments).
+---@param lines string[]
+---@param blocks chez.EvalBlock[]
+local function block_occurrences(lines, blocks, name)
+  local out = {}
+  for _, b in ipairs(blocks) do
+    for row = b.trow, b.erow do
+      local line = lines[row + 1] or ""
+      local first = row == b.trow and b.tcol + 5 or 0
+      local last = row == b.erow and b.ecol - 2 or #line
+      local init = first + 1
+      while true do
+        local s, e = line:find(name, init, true)
+        if not s or e > last then
+          break
+        end
+        local before, after = line:sub(s - 1, s - 1), line:sub(e + 1, e + 1)
+        local comment = line:sub(first + 1, s - 1):find(";", 1, true)
+        if not comment and (before == "" or before:match(DELIM)) and (after == "" or after:match(DELIM)) then
+          out[#out + 1] = { row, s - 1, row, e }
+        end
+        init = e + 1
+      end
+    end
+  end
+  return out
+end
+
 ---Convert the checker output into vim.diagnostic items.
 ---@param buf integer
 ---@param name string file name given to the checker
 ---@param result table
 ---@param lines string[] buffer lines the check ran on
-function M.to_diagnostics(buf, name, result, lines)
+---@param blocks? chez.EvalBlock[] #eval blocks sent to the checker
+function M.to_diagnostics(buf, name, result, lines, blocks)
   local items = {}
+  local seen = {}
+  local function add(item)
+    local key = table.concat({ item.lnum, item.col, item.message }, ":")
+    if not seen[key] then
+      seen[key] = true
+      items[#items + 1] = item
+    end
+  end
   for _, d in ipairs(result.diagnostics or {}) do
     local severity = d.severity == "error" and vim.diagnostic.severity.ERROR or vim.diagnostic.severity.WARN
     if d.name then
-      for _, r in ipairs(occurrences(buf, d.name)) do
-        items[#items + 1] = {
+      local where = d.block and block_occurrences(lines, blocks or {}, d.name) or occurrences(buf, d.name)
+      for _, r in ipairs(where) do
+        add({
           lnum = r[1], col = r[2], end_lnum = r[3], end_col = r[4],
           severity = severity, source = "chez", message = clean_message(d.message),
-        }
+        })
       end
     else
       local row, col = 0, 0
@@ -76,9 +117,9 @@ function M.to_diagnostics(buf, name, result, lines)
       elseif d.pos then
         row, col = util.offset_to_pos(lines, d.pos)
       end
-      items[#items + 1] = {
+      add({
         lnum = row, col = col, severity = severity, source = "chez", message = clean_message(d.message or "error"),
-      }
+      })
     end
   end
   return items
@@ -101,9 +142,31 @@ function M.check(buf)
   local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
   local tick = vim.api.nvim_buf_get_changedtick(buf)
   local root = require("chez.repl").root_for(buf)
+  -- #eval blocks are checked as code: their delimiters are blanked (same
+  -- length, so positions do not change) and their ranges passed along
+  local source = lines
+  local ok_b, blocks = pcall(require("chez.evalblock").find, buf)
+  blocks = ok_b and blocks or {}
+  local ranges = {}
+  if #blocks > 0 then
+    source = vim.deepcopy(lines)
+    local function blank(row, col, n)
+      local l = source[row + 1]
+      source[row + 1] = l:sub(1, col) .. string.rep(" ", n) .. l:sub(col + n + 1)
+    end
+    for _, b in ipairs(blocks) do
+      blank(b.srow, b.scol, 2)
+      blank(b.trow, b.tcol, 5)
+      blank(b.erow, b.ecol - 2, 2)
+      ranges[#ranges + 1] = b.offset .. ":" .. b.end_offset
+    end
+  end
   local scheme_dir = util.plugin_root .. "/scheme"
   local cmd = vim.deepcopy(config.repl.cmd)
   vim.list_extend(cmd, { "--libdirs", scheme_dir, "--script", scheme_dir .. "/check.ss", name })
+  if #ranges > 0 then
+    cmd[#cmd + 1] = "--blocks=" .. table.concat(ranges, ",")
+  end
   for _, d in ipairs(config.repl.libdirs) do
     local path = vim.fs.normalize(vim.fs.joinpath(root, d))
     if vim.fn.isdirectory(path) == 1 then
@@ -112,7 +175,7 @@ function M.check(buf)
   end
   local ok, proc = pcall(vim.system, cmd, {
     cwd = root,
-    stdin = table.concat(lines, "\n") .. "\n",
+    stdin = table.concat(source, "\n") .. "\n",
     text = true,
     timeout = config.diagnostics.timeout,
   }, function(obj)
@@ -132,7 +195,7 @@ function M.check(buf)
         end
         return
       end
-      vim.diagnostic.set(ns, buf, M.to_diagnostics(buf, name, result, lines))
+      vim.diagnostic.set(ns, buf, M.to_diagnostics(buf, name, result, lines, blocks))
     end)
   end)
   if ok then

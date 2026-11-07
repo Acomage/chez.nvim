@@ -6,6 +6,13 @@
 ((sexp_comment) @comment
   (#set! priority 105))
 
+; #eval blocks: the code is not coloured as a comment (it is highlighted
+; through injections.scm); `#chez-eval-block!` narrows the range to the code
+((block_comment) @chez.evalblock
+  (#lua-match? @chez.evalblock "^#|%s*#eval%s")
+  (#chez-eval-block! @chez.evalblock)
+  (#set! priority 101))
+
 ; reader directives the grammar does not know: #!chezscheme #!fold-case ...
 ((ERROR) @keyword.directive
   (#lua-match? @keyword.directive "^#![%a%d%-]+$"))

@@ -184,6 +184,16 @@ expression wrote. A failing top-level form of the file gets a `✗` too. Input
 reads see end-of-file. With `eval_blocks.on_save` the blocks are evaluated
 whenever the buffer is written; `eval_blocks.timeout` stops runaway code.
 
+The code in a block is treated as code, not as a comment:
+- highlighting: tree-sitter parses it as Scheme (an injection, see
+  `queries/scheme/injections.scm`); the comment colour is replaced by
+  `@chez.evalblock` (Normal foreground);
+- rainbow brackets, the current form, `%`, indentation and smart brackets
+  work inside it;
+- diagnostics check it in the scope the block runner uses (the file's
+  definitions and the internal definitions of its libraries), e.g. unbound
+  identifiers and syntax errors in the block are reported.
+
 ==============================================================================
 6. COMPLETION                                               *chez-completion*
 

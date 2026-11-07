@@ -60,6 +60,10 @@ function M.setup()
     set("ChezRainbow" .. i, { fg = fg, ctermfg = rainbow_cterm[i] })
   end
   set("ChezCurrentForm", current_form())
+  -- code in #eval blocks: replaces the comment colour (and italics) so the
+  -- injected Scheme highlights show as in ordinary code
+  local fg = color("Normal", "fg")
+  set("@chez.evalblock", fg and { fg = fg, nocombine = true } or { link = "Normal" })
 end
 
 return M

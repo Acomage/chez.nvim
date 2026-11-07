@@ -28,7 +28,8 @@ results, completion, documentation, macro expansion and diagnostics.
 - **`#eval` blocks**: expressions in a `#|#eval ... |#` comment are
   evaluated by a fresh Chez process after loading the whole file and the
   libraries it imports (library internals included); results as virtual
-  text after each expression.
+  text after each expression. The block's code is highlighted, indented and
+  checked like ordinary code.
 - **Macro expansion**: `expand` and `expand/optimize` (cp0) in a float.
 - **Diagnostics**: a checker process expands (without running) the buffer —
   on open, on save and after edits — and reports syntax errors and unbound

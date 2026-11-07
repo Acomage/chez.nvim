@@ -27,8 +27,59 @@ local running = {}
 ---@field trow integer  position of the `#eval` tag
 ---@field tcol integer
 ---@field offset integer  character offset of the code after `#eval`
+---@field end_offset integer  character offset of the closing `|#`
 ---@field code string
 ---@field handle? integer  inline mark shown on the tag while running
+
+---Parse the text of a block comment starting at (sr, sc). Returns nil when
+---it is not an `#eval` block, otherwise the position of the `#eval` tag, the
+---code after it and the end of the code (before `|#`).
+---@param text string
+---@param sr integer
+---@param sc integer
+---@return { trow: integer, tcol: integer, code: string, crow: integer, ccol: integer, erow: integer, ecol: integer }?
+function M.parse(text, sr, sc)
+  if text:sub(1, 2) ~= "#|" or text:sub(-2) ~= "|#" or #text < 4 then
+    return nil
+  end
+  local inner = text:sub(3, -3)
+  local pos = inner:find("#eval", 1, true)
+  if not pos or not inner:sub(1, pos - 1):match("^%s*$") then
+    return nil
+  end
+  local after = inner:sub(pos + 5, pos + 5)
+  if after ~= "" and not after:match("%s") then
+    return nil
+  end
+  -- 0-based (row, col) of byte index i (1-based) of `text`
+  local function at(i)
+    local before = text:sub(1, i - 1)
+    local _, nl = before:gsub("\n", "")
+    if nl == 0 then
+      return sr, sc + #before
+    end
+    return sr + nl, #before:match("[^\n]*$")
+  end
+  local trow, tcol = at(pos + 2)
+  local erow, ecol = at(#text - 1)
+  return {
+    trow = trow, tcol = tcol, crow = trow, ccol = tcol + 5, erow = erow, ecol = ecol,
+    code = inner:sub(pos + 5),
+  }
+end
+
+---Range of the code in an `#eval` block comment node (for tree-sitter
+---injections and highlights), or nil.
+---@param node TSNode
+---@param source integer|string
+---@return integer[]? { start_row, start_col, end_row, end_col }
+function M.code_range(node, source)
+  local sr, sc = node:range()
+  local p = M.parse(vim.treesitter.get_node_text(node, source), sr, sc)
+  if p then
+    return { p.crow, p.ccol, p.erow, p.ecol }
+  end
+end
 
 ---`#eval` blocks of `buf`, in buffer order.
 ---@param buf integer
@@ -41,27 +92,15 @@ function M.find(buf)
   local q = vim.treesitter.query.parse("scheme", "((block_comment) @c)")
   local out = {}
   for _, node in q:iter_captures(root, buf) do
-    local text = vim.treesitter.get_node_text(node, buf)
-    if text:sub(1, 2) == "#|" and text:sub(-2) == "|#" and #text >= 4 then
-      local inner = text:sub(3, -3)
-      local pos = inner:find("#eval", 1, true)
-      local after = pos and inner:sub(pos + 5, pos + 5)
-      if pos and inner:sub(1, pos - 1):match("^%s*$") and (after == "" or after:match("%s")) then
-        local sr, sc, er, ec = node:range()
-        local before = inner:sub(1, pos - 1)
-        local _, nl = before:gsub("\n", "")
-        local trow, tcol
-        if nl == 0 then
-          trow, tcol = sr, sc + 2 + #before
-        else
-          trow, tcol = sr + nl, #before:match("[^\n]*$")
-        end
-        out[#out + 1] = {
-          srow = sr, scol = sc, erow = er, ecol = ec, trow = trow, tcol = tcol,
-          offset = util.char_offset(buf, trow, tcol + 5),
-          code = inner:sub(pos + 5),
-        }
-      end
+    local sr, sc, er, ec = node:range()
+    local p = M.parse(vim.treesitter.get_node_text(node, buf), sr, sc)
+    if p then
+      out[#out + 1] = {
+        srow = sr, scol = sc, erow = er, ecol = ec, trow = p.trow, tcol = p.tcol,
+        offset = util.char_offset(buf, p.crow, p.ccol),
+        end_offset = util.char_offset(buf, p.erow, p.ecol),
+        code = p.code,
+      }
     end
   end
   table.sort(out, function(a, b)

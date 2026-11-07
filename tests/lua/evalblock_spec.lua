@@ -102,4 +102,59 @@ describe("#eval blocks", function()
     assert.is_truthy(g[1]:find("✗", 1, true))
     assert.are.equal(" => 1", g[3])
   end)
+
+  it("reads the code of blocks as code: brackets, depth, indentation", function()
+    local brackets = require("chez.brackets")
+    local indent = require("chez.indent")
+    local buf = open("reader.ss", {
+      "#|#eval",
+      "(f (g 1)",
+      "   2)",
+      "|#",
+      "#|",
+      "#eval",
+      "(h [x])|#",
+      "#| plain (a) |#",
+      "(b)",
+    })
+    local list = brackets.brackets(buf, 0, 8)
+    local rows = {}
+    for _, b in ipairs(list) do
+      rows[#rows + 1] = table.concat(b, ",")
+    end
+    assert.are.same({
+      "1,0,1", "1,3,2", "1,7,2", "2,4,1",
+      "6,0,1", "6,3,2", "6,5,2", "6,6,1",
+      "8,0,1", "8,2,1",
+    }, rows)
+    assert.are.same({ 1, 3, 1, 7 }, brackets.enclosing(buf, 1, 5))
+    -- line 3 continues (f ...: aligned with the first argument
+    assert.are.equal(3, indent.indentexpr(3))
+    -- an unclosed list in a block does not leak out of it
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "#|#eval (f", "|#", "(b)" })
+    assert.are.same({ { 0, 8, 1 }, { 2, 0, 1 }, { 2, 2, 1 } }, brackets.brackets(buf, 0, 2))
+  end)
+
+  it("checks the code of blocks (diagnostics)", function()
+    config.setup({ diagnostics = { enabled = true, on_attach = false }, repl = { open_on_start = false } })
+    local buf = open("check.sls", {
+      "(library (checked) (export f) (import (chezscheme))",
+      "  (define (helper x) (+ x 1))",
+      "  (define (f x) (helper x)))",
+      "#|#eval",
+      "(helper 1) (nope 2)",
+      "|#",
+    })
+    local diag = require("chez.diagnostics")
+    diag.check(buf)
+    local ok = vim.wait(15000, function()
+      return #vim.diagnostic.get(buf, { namespace = diag.namespace }) > 0
+    end, 50)
+    assert.is_true(ok)
+    local ds = vim.diagnostic.get(buf, { namespace = diag.namespace })
+    assert.are.equal(1, #ds)
+    assert.are.same({ 4, 12, 16 }, { ds[1].lnum, ds[1].col, ds[1].end_col })
+    assert.is_truthy(ds[1].message:find("nope", 1, true))
+    config.setup({ diagnostics = { enabled = false }, repl = { open_on_start = false } })
+  end)
 end)
