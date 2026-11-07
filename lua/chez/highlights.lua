@@ -45,7 +45,7 @@ local function current_form()
   local dark = vim.o.background == "dark"
   local bg = color("Normal", "bg") or (dark and 0x000000 or 0xffffff)
   local accent = color("DiagnosticInfo", "fg") or color("Function", "fg") or (dark and 0x61afef or 0x4078f2)
-  return { bg = blend(bg, accent, dark and 0.12 or 0.10), ctermbg = dark and 236 or 254 }
+  return { bg = blend(bg, accent, dark and 0.25 or 0.20), ctermbg = dark and 238 or 252 }
 end
 
 function M.setup()
