@@ -178,6 +178,23 @@ describe("repl", function()
     assert.is_truthy(vim.tbl_contains(repl_lines(s), "42"))
   end)
 
+  it("clears earlier results of the buffer when the file is loaded", function()
+    local path = write("load.ss", { "(define (h) 1)", "(car 5)" })
+    vim.cmd("edit " .. path)
+    local b = vim.api.nvim_get_current_buf()
+    vim.api.nvim_win_set_cursor(0, { 2, 0 })
+    eval.root()
+    local sess = repl.get(b)
+    assert.is_true(wait_idle(sess))
+    assert.is_truthy(inline_texts(b)[1].text:find("✗", 1, true))
+    -- fix the error elsewhere (in the REPL), then load the file
+    vim.fn.writefile({ "(define (h) 1)", "(car '(5))" }, path)
+    vim.cmd("edit!")
+    eval.file()
+    assert.is_true(wait_idle(sess))
+    assert.are.same({}, inline_texts(b))
+  end)
+
   it("restarts", function()
     local old_pid = s.pid
     repl.restart(buf)

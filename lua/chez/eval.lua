@@ -184,6 +184,8 @@ function M.file()
   if not s then
     return
   end
+  -- the whole file is evaluated again: earlier results in it are outdated
+  inline.clear(buf)
   ui.echo(s, '(load "' .. vim.fn.fnamemodify(file, ":~:.") .. '")', "file")
   local libraries = ts.available(buf) and ts.library_names(buf) or {}
   s:request("load", { file = file }, function(resp)

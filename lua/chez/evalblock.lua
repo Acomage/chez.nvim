@@ -19,6 +19,9 @@ local RS = "\30"
 ---@type table<integer, table> buf -> running job
 local running = {}
 
+---@type table<integer, integer[]> buf -> inline marks of the last run
+local results = {}
+
 ---@class chez.EvalBlock
 ---@field srow integer  range of the whole comment (0-based, end exclusive col)
 ---@field scol integer
@@ -137,6 +140,10 @@ local function show(buf, lines, bfp, efp, resp)
   local er, ec = util.offset_to_pos(lines, efp or bfp)
   local h = inline.start(buf, sr, sc, er, ec, { flash = false, force = true })
   inline.set(buf, h, resp)
+  if h then
+    results[buf] = results[buf] or {}
+    table.insert(results[buf], h)
+  end
 end
 
 ---Stop the running evaluation of `buf`, if any.
@@ -173,6 +180,12 @@ function M.run(buf, opts)
     return
   end
   M.stop(buf)
+  -- results of the previous run, also outside the blocks (errors of
+  -- top-level forms of the file), are outdated now
+  for _, h in ipairs(results[buf] or {}) do
+    inline.remove(buf, h)
+  end
+  results[buf] = {}
   local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
   local tick = vim.api.nvim_buf_get_changedtick(buf)
   local job = { blocks = blocks, done = false }
@@ -187,8 +200,7 @@ function M.run(buf, opts)
   end
 
   local function current()
-    return running[buf] == job and vim.api.nvim_buf_is_valid(buf)
-      and vim.api.nvim_buf_get_changedtick(buf) == tick
+    return running[buf] == job and vim.api.nvim_buf_is_valid(buf) and util.same_text(buf, tick, lines)
   end
 
   local function handle(msg)
@@ -304,6 +316,7 @@ function M.attach(buf)
     buffer = buf,
     callback = function()
       M.stop(buf)
+      results[buf] = nil
       pcall(vim.api.nvim_del_augroup_by_id, group)
     end,
   })

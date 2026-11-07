@@ -177,4 +177,51 @@ describe("#eval blocks", function()
     assert.are.equal(0, depth({ "#|#eval (b) |" }))
     assert.are.equal(1, depth({ "#|#eval (b) |#" }))
   end)
+
+  it("removes results of the previous run, also outside the blocks", function()
+    -- the error comes from an imported library; fixing that file must clear it
+    vim.fn.writefile({
+      "(library (dep) (export g) (import (chezscheme))",
+      "  (define (g) (car 5)))",
+    }, tmp .. "/dep.sls")
+    local buf = open("rerun.ss", {
+      "(import (dep))",
+      "(define v (g))",
+      "#|#eval",
+      "(+ 1 1)",
+      "|#",
+    })
+    evalblock.run(buf)
+    assert.is_true(wait_done(buf))
+    assert.is_truthy((ghosts(buf)[1] or ""):find("✗", 1, true))
+    vim.fn.writefile({
+      "(library (dep) (export g) (import (chezscheme))",
+      "  (define (g) (car '(5))))",
+    }, tmp .. "/dep.sls")
+    evalblock.run(buf)
+    assert.is_true(wait_done(buf))
+    assert.is_nil(ghosts(buf)[1])
+    assert.are.equal(" => 2", ghosts(buf)[3])
+  end)
+
+  it("rechecks the project's other buffers when a file is written", function()
+    config.setup({ diagnostics = { enabled = true, on_attach = true, debounce = 0 }, repl = { open_on_start = false } })
+    local diag = require("chez.diagnostics")
+    vim.fn.writefile({
+      "(library (dep2) (export g) (import (chezscheme))",
+      "  (define (g) (undefined-thing)))",
+    }, tmp .. "/dep2.sls")
+    local main = open("uses-dep2.ss", { "(import (dep2))", "(g)" })
+    local function count(b)
+      return #vim.diagnostic.get(b, { namespace = diag.namespace })
+    end
+    assert.is_true(vim.wait(15000, function() return count(main) > 0 end, 50))
+    local dep = open("dep2.sls", {
+      "(library (dep2) (export g) (import (chezscheme))",
+      "  (define (g) 1))",
+    })
+    vim.cmd("silent write")
+    assert.is_true(vim.wait(15000, function() return count(main) == 0 and count(dep) == 0 end, 50))
+    config.setup({ diagnostics = { enabled = false }, repl = { open_on_start = false } })
+  end)
 end)

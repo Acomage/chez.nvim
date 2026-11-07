@@ -96,6 +96,29 @@ function M.location_from_message(msg)
   end
 end
 
+---Does `buf` still hold `lines`, a snapshot taken at changedtick `tick`?
+---The changedtick also moves without text changes (Neovim increments it
+---when a buffer that was just read is entered), so the text is compared then.
+---@param buf integer
+---@param tick integer
+---@param lines string[]
+---@return boolean
+function M.same_text(buf, tick, lines)
+  if vim.api.nvim_buf_get_changedtick(buf) == tick then
+    return true
+  end
+  local cur = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+  if #cur ~= #lines then
+    return false
+  end
+  for i = 1, #cur do
+    if cur[i] ~= lines[i] then
+      return false
+    end
+  end
+  return true
+end
+
 ---Truncate `s` to at most `n` display cells, appending "…".
 function M.truncate(s, n)
   if vim.fn.strdisplaywidth(s) <= n then

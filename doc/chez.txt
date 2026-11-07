@@ -274,7 +274,9 @@ changes are checked too), a separate Chez process reads the
 buffer, compiles library forms, processes imports and expands the remaining
 top-level forms together without running them. It reports reader and syntax
 errors with their positions, errors in libraries (including references to
-unbound identifiers) and unbound variables in other code.
+unbound identifiers) and unbound variables in other code. Writing a buffer
+also re-checks the project's other open Chez buffers, since libraries they
+import may have changed.
 
 The code of `#eval` blocks is checked too, in the scope the block runner
 uses: the file's definitions and the internal definitions of its libraries

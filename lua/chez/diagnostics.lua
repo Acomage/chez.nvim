@@ -184,8 +184,8 @@ function M.check(buf)
         return -- superseded by a newer check
       end
       running[buf] = nil
-      if not vim.api.nvim_buf_is_valid(buf) or vim.api.nvim_buf_get_changedtick(buf) ~= tick then
-        return -- stale
+      if not vim.api.nvim_buf_is_valid(buf) or not util.same_text(buf, tick, lines) then
+        return -- stale: the next edit starts a new check
       end
       local line = (obj.stdout or ""):match("[^\n]*{.*}")
       local okj, result = pcall(vim.json.decode, line or "", { luanil = { object = true, array = true } })
@@ -205,6 +205,19 @@ function M.check(buf)
   end
 end
 
+---Check the other loaded Chez buffers of `buf`'s project: after `buf` was
+---written, libraries they import may have changed.
+---@param buf integer
+function M.check_dependents(buf)
+  local repl = require("chez.repl")
+  local root = repl.root_for(buf)
+  for _, b in ipairs(vim.api.nvim_list_bufs()) do
+    if b ~= buf and vim.api.nvim_buf_is_loaded(b) and vim.b[b].chez_attached and repl.root_for(b) == root then
+      M.check(b)
+    end
+  end
+end
+
 ---Enable automatic checks for `buf`.
 ---@param buf integer
 function M.attach(buf)
@@ -221,6 +234,9 @@ function M.attach(buf)
       timer:stop()
       if ev.event == "BufWritePost" or (cfg.debounce or 0) <= 0 then
         M.check(buf)
+        if ev.event == "BufWritePost" then
+          M.check_dependents(buf)
+        end
         return
       end
       timer:start(cfg.debounce, 0, vim.schedule_wrap(function()
