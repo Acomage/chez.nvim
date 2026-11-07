@@ -157,4 +157,24 @@ describe("#eval blocks", function()
     assert.is_truthy(ds[1].message:find("nope", 1, true))
     config.setup({ diagnostics = { enabled = false }, repl = { open_on_start = false } })
   end)
+
+  it("injects only complete blocks (an unterminated one would nest forever)", function()
+    local buf = vim.api.nvim_create_buf(false, true)
+    local function depth(lines)
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+      local parser = vim.treesitter.get_parser(buf, "scheme")
+      parser:parse(true)
+      local n, t = 0, parser
+      while next(t:children()) and n < 10 do
+        n, t = n + 1, select(2, next(t:children()))
+      end
+      return n
+    end
+    assert.are.equal(1, depth({ "(a)", "#|#eval", "(b)", "|#" }))
+    assert.are.equal(0, depth({ "(a)", "#|#eval", "(b)" }))
+    -- typing into a block: complete -> unterminated -> complete
+    assert.are.equal(1, depth({ "#|#eval (b) |#" }))
+    assert.are.equal(0, depth({ "#|#eval (b) |" }))
+    assert.are.equal(1, depth({ "#|#eval (b) |#" }))
+  end)
 end)

@@ -3,14 +3,27 @@ if vim.g.loaded_chez then
 end
 vim.g.loaded_chez = true
 
--- queries/scheme/{highlights,injections}.scm: narrow a `#| #eval ... |#`
--- block comment capture to the code inside it
-vim.treesitter.query.add_directive("chez-eval-block!", function(match, _, source, pred, metadata)
-  local id = pred[2]
+-- queries/scheme/{highlights,injections}.scm: `#chez-eval-block?` matches a
+-- complete `#| #eval ... |#` block comment, `#chez-eval-block!` narrows the
+-- capture to the code inside it. Only complete blocks may be injected: an
+-- unterminated one would be injected as a whole, contain itself and nest
+-- without end.
+local function capture_node(match, id)
   local node = match[id]
   if type(node) == "table" then
     node = node[#node]
   end
+  return node
+end
+
+vim.treesitter.query.add_predicate("chez-eval-block?", function(match, _, source, pred)
+  local node = capture_node(match, pred[2])
+  return node ~= nil and require("chez.evalblock").code_range(node, source) ~= nil
+end, { force = true })
+
+vim.treesitter.query.add_directive("chez-eval-block!", function(match, _, source, pred, metadata)
+  local id = pred[2]
+  local node = capture_node(match, id)
   if not node then
     return
   end

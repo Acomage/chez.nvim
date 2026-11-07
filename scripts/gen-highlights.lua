@@ -60,6 +60,7 @@ local template = [[
 ; through injections.scm); `#chez-eval-block!` narrows the range to the code
 ((block_comment) @chez.evalblock
   (#lua-match? @chez.evalblock "^#|%%s*#eval%%s")
+  (#chez-eval-block? @chez.evalblock)
   (#chez-eval-block! @chez.evalblock)
   (#set! priority 101))
 
