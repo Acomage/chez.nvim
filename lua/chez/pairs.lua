@@ -7,7 +7,7 @@
 -- definition's closer, losing a bracket. Here the decision uses the reader
 -- state of the whole top-level form instead (strings, comments and #\( are
 -- understood).
-local indent = require("chez.indent")
+local reader = require("chez.reader")
 
 local M = {}
 
@@ -20,15 +20,13 @@ end
 
 ---Reader state at (row, col) and the line text.
 local function state_at(buf, row, col)
-  local s = indent.state_at(buf, row)
+  local s = reader.state_at(buf, row)
   local line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1] or ""
-  indent.feed(s, line:sub(1, col), row)
+  reader.feed(s, line:sub(1, col), row)
   return s, line
 end
 
-local function at_top(s)
-  return #s.stack == 1 and not s.str and not s.bar and s.block == 0
-end
+local at_top = reader.at_top
 
 ---Is (row, col) inside a string, comment, |symbol| or after `#\`?
 local function in_literal(s, line, col)
@@ -44,19 +42,12 @@ end
 ---@param row integer
 ---@return integer
 function M.balance(buf, row)
-  -- start at a cached checkpoint that is outside any form
-  local CHECK = 16
-  local start = row - row % CHECK
-  local s = indent.state_at(buf, start)
-  while start > 0 and not at_top(s) do
-    start = start - CHECK
-    s = indent.state_at(buf, start)
-  end
+  local start, s = reader.form_start(buf, row)
   local extra0 = s.extra
   local lines = vim.api.nvim_buf_get_lines(buf, start, -1, false)
   for k, line in ipairs(lines) do
     local r = start + k - 1
-    indent.feed(s, line, r)
+    reader.feed(s, line, r)
     if r >= row and at_top(s) then
       break
     end

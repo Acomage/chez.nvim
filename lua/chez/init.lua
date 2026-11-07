@@ -5,7 +5,7 @@ local M = {}
 ---@param opts? chez.Options
 function M.setup(opts)
   config.setup(opts)
-  require("chez.indent").reset()
+  require("chez.reader").reset()
   -- re-attach buffers that were opened before setup()
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].filetype == "scheme" then
@@ -32,7 +32,7 @@ function M.attach(buf)
     -- the runtime scheme ftplugin adds lisp-style reindent triggers already;
     -- reindent when typing a closing bracket on an otherwise empty line
     bo.indentkeys = "!^F,o,O,0),0]"
-    require("chez.indent").attach(buf)
+    require("chez.reader").attach(buf)
     append_undo(buf, "setl lispoptions< indentexpr< indentkeys<")
   end
   if config.editing.literal_quotes then

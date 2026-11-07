@@ -1,5 +1,6 @@
 -- Re-indent Chez Scheme code with the same rules as 'indentexpr'.
 local indent = require("chez.indent")
+local reader = require("chez.reader")
 
 local M = {}
 
@@ -14,11 +15,11 @@ end
 ---state by default). Lines starting inside strings or block comments are kept
 ---verbatim; trailing whitespace is removed from all other lines.
 ---@param lines string[]
----@param opts? { state?: chez.indent.State, row?: integer, expandtab?: boolean, tabstop?: integer }
+---@param opts? { state?: chez.reader.State, row?: integer, expandtab?: boolean, tabstop?: integer }
 ---@return string[]
 function M.format_lines(lines, opts)
   opts = opts or {}
-  local s = opts.state or indent.new_state()
+  local s = opts.state or reader.new_state()
   local row = opts.row or 0
   local et = opts.expandtab ~= false
   local ts = opts.tabstop or 8
@@ -30,7 +31,7 @@ function M.format_lines(lines, opts)
       line = body == "" and "" or indent_str(n, et, ts) .. body
     end
     out[k] = line
-    indent.feed(s, line, row + k - 1)
+    reader.feed(s, line, row + k - 1)
   end
   return out
 end
@@ -46,7 +47,7 @@ function M.format(buf, first, last)
   last = last or vim.api.nvim_buf_line_count(buf)
   local lines = vim.api.nvim_buf_get_lines(buf, first, last, false)
   local out = M.format_lines(lines, {
-    state = indent.state_at(buf, first),
+    state = reader.state_at(buf, first),
     row = first,
     expandtab = vim.bo[buf].expandtab,
     tabstop = vim.bo[buf].tabstop,

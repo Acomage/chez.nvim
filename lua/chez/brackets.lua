@@ -4,16 +4,15 @@
 -- * current form: the innermost list around the cursor gets a background;
 -- * jumping between matching brackets (`%`).
 --
--- Brackets are found with the reader of chez.indent, so brackets in strings,
+-- Brackets are found with chez.reader, so brackets in strings,
 -- comments, |symbols| and character literals (#\( ) are ignored, and the
 -- cached reader states make it cheap to start scanning anywhere.
 local config = require("chez.config")
-local indent = require("chez.indent")
+local reader = require("chez.reader")
 
 local M = {}
 
 local api = vim.api
-local CHECKPOINT = 16
 local NCOLORS = 6
 local CHUNK = 256
 
@@ -23,9 +22,7 @@ local form_ns = api.nvim_create_namespace("chez.current_form")
 ---@type table<integer, boolean>
 local rainbow_bufs = {}
 
-local function at_top(s)
-  return #s.stack == 1 and not s.str and not s.bar and s.block == 0
-end
+local at_top = reader.at_top
 
 ---@class chez.brackets.Pair
 ---@field [1] integer open row
@@ -55,12 +52,7 @@ function M.scan(buf, row)
   if c and c.tick == tick and row >= c.first and row <= c.last then
     return c
   end
-  local first = row - row % CHECKPOINT
-  local s = indent.state_at(buf, first)
-  while first > 0 and not at_top(s) do
-    first = first - CHECKPOINT
-    s = indent.state_at(buf, first)
-  end
+  local first, s = reader.form_start(buf, row)
   local result, stack = {}, {}
   local r = first
   local function on_bracket(col, open)
@@ -79,7 +71,7 @@ function M.scan(buf, row)
     local lines = api.nvim_buf_get_lines(buf, from, from + CHUNK, false)
     for k, line in ipairs(lines) do
       r = from + k - 1
-      indent.feed(s, line, r, on_bracket)
+      reader.feed(s, line, r, on_bracket)
       if r >= row and at_top(s) then
         last, done = r, true
         break
@@ -182,12 +174,12 @@ end
 ---@param last integer
 ---@return { [1]: integer, [2]: integer, [3]: integer }[] row, col, depth
 function M.brackets(buf, first, last)
-  local s = indent.state_at(buf, first)
+  local s = reader.state_at(buf, first)
   local out = {}
   local lines = api.nvim_buf_get_lines(buf, first, last + 1, false)
   for k, line in ipairs(lines) do
     local r = first + k - 1
-    indent.feed(s, line, r, function(col, _, depth)
+    reader.feed(s, line, r, function(col, _, depth)
       out[#out + 1] = { r, col, depth }
     end)
   end

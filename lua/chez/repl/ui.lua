@@ -32,10 +32,10 @@ end
 --------------------------------------------------------------------------------
 
 local function is_complete(code)
-  local indent = require("chez.indent")
-  local st = indent.new_state()
+  local reader = require("chez.reader")
+  local st = reader.new_state()
   for i, line in ipairs(vim.split(code, "\n", { plain = true })) do
-    indent.feed(st, line, i - 1)
+    reader.feed(st, line, i - 1)
   end
   return #st.stack == 1 and not st.str and not st.bar and st.block == 0
 end

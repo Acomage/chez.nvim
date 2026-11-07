@@ -1,5 +1,6 @@
 local format = require("chez.format")
 local indent = require("chez.indent")
+local reader = require("chez.reader")
 local config = require("chez.config")
 
 -- Each case is written correctly indented; the test strips all indentation
@@ -140,17 +141,17 @@ describe("indent", function()
     end
     local expected = format.format_lines(src)
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, expected)
-    indent.attach(buf)
+    reader.attach(buf)
     for lnum, line in ipairs(expected) do
       assert.are.equal(#line:match("^%s*"), indent.indentexpr(lnum))
     end
     -- edit near the top: cached states below must be invalidated
     vim.api.nvim_buf_set_lines(buf, 1, 1, false, { "      (begin (list" })
     local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-    local s = indent.new_state()
+    local s = reader.new_state()
     for lnum, line in ipairs(lines) do
       assert.are.equal(indent.compute(s), indent.indentexpr(lnum), "line " .. lnum)
-      indent.feed(s, line, lnum - 1)
+      reader.feed(s, line, lnum - 1)
     end
     vim.api.nvim_buf_delete(buf, { force = true })
   end)
