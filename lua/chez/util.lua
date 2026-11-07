@@ -3,6 +3,51 @@ local M = {}
 ---Absolute path of the plugin's root directory.
 M.plugin_root = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h:h:h")
 
+---`buf`, with nil or 0 meaning the current buffer.
+---@param buf? integer
+---@return integer
+function M.buf(buf)
+  return (buf == nil or buf == 0) and vim.api.nvim_get_current_buf() or buf
+end
+
+---Normalized file name of `buf`; nil for unnamed and URI (`oil://…`) buffers.
+---@param buf integer
+---@return string?
+function M.buf_file(buf)
+  local name = vim.api.nvim_buf_get_name(buf)
+  if name == "" or name:match("^%a[%w+.-]*://") then
+    return nil
+  end
+  return vim.fs.normalize(name)
+end
+
+---Library directories of the project at `root`: the `repl.libdirs` entries
+---that exist.
+---@param root string
+---@return string[]
+function M.project_libdirs(root)
+  local out = {}
+  for _, d in ipairs(require("chez.config").repl.libdirs) do
+    local path = vim.fs.normalize(vim.fs.joinpath(root, d))
+    if vim.fn.isdirectory(path) == 1 then
+      out[#out + 1] = path
+    end
+  end
+  return out
+end
+
+---Command line running `scheme/<script>` of the plugin with `repl.cmd`, the
+---plugin's Scheme libraries available, followed by `args`.
+---@param script string e.g. "check.ss"
+---@param args? string[]
+---@return string[]
+function M.chez_script(script, args)
+  local dir = M.plugin_root .. "/scheme"
+  local cmd = vim.deepcopy(require("chez.config").repl.cmd)
+  vim.list_extend(cmd, { "--libdirs", dir, "--script", dir .. "/" .. script })
+  return vim.list_extend(cmd, args or {})
+end
+
 ---Number of characters (code points) in `s`.
 ---@param s string
 function M.strchars(s)

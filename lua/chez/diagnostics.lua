@@ -128,7 +128,7 @@ end
 ---Check `buf` now.
 ---@param buf? integer
 function M.check(buf)
-  buf = (buf == nil or buf == 0) and vim.api.nvim_get_current_buf() or buf
+  buf = util.buf(buf)
   if not vim.api.nvim_buf_is_valid(buf) then
     return
   end
@@ -137,8 +137,7 @@ function M.check(buf)
   end
   local job = {}
   running[buf] = job
-  local name = vim.api.nvim_buf_get_name(buf)
-  name = name ~= "" and vim.fs.normalize(name) or ("buffer-" .. buf)
+  local name = util.buf_file(buf) or ("buffer-" .. buf)
   local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
   local tick = vim.api.nvim_buf_get_changedtick(buf)
   local root = require("chez.repl").root_for(buf)
@@ -161,18 +160,11 @@ function M.check(buf)
       ranges[#ranges + 1] = b.offset .. ":" .. b.end_offset
     end
   end
-  local scheme_dir = util.plugin_root .. "/scheme"
-  local cmd = vim.deepcopy(config.repl.cmd)
-  vim.list_extend(cmd, { "--libdirs", scheme_dir, "--script", scheme_dir .. "/check.ss", name })
+  local args = { name }
   if #ranges > 0 then
-    cmd[#cmd + 1] = "--blocks=" .. table.concat(ranges, ",")
+    args[#args + 1] = "--blocks=" .. table.concat(ranges, ",")
   end
-  for _, d in ipairs(config.repl.libdirs) do
-    local path = vim.fs.normalize(vim.fs.joinpath(root, d))
-    if vim.fn.isdirectory(path) == 1 then
-      cmd[#cmd + 1] = path
-    end
-  end
+  local cmd = util.chez_script("check.ss", vim.list_extend(args, util.project_libdirs(root)))
   local ok, proc = pcall(vim.system, cmd, {
     cwd = root,
     stdin = table.concat(source, "\n") .. "\n",

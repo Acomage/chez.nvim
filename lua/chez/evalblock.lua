@@ -112,27 +112,6 @@ function M.find(buf)
   return out
 end
 
-local function buf_name(buf)
-  local name = vim.api.nvim_buf_get_name(buf)
-  if name == "" or name:match("^%a[%w+.-]*://") then
-    return "buffer-" .. buf
-  end
-  return vim.fs.normalize(name)
-end
-
----Command line of the runner process, with the project's library directories.
-local function command(root)
-  local scheme_dir = util.plugin_root .. "/scheme"
-  local cmd = vim.deepcopy(config.repl.cmd)
-  vim.list_extend(cmd, { "--libdirs", scheme_dir, "--script", scheme_dir .. "/evalblock.ss" })
-  for _, d in ipairs(config.repl.libdirs) do
-    local path = vim.fs.normalize(vim.fs.joinpath(root, d))
-    if vim.fn.isdirectory(path) == 1 then
-      cmd[#cmd + 1] = path
-    end
-  end
-  return cmd
-end
 
 ---Show `resp` as a result for the text between character offsets bfp and efp.
 local function show(buf, lines, bfp, efp, resp)
@@ -165,7 +144,7 @@ end
 ---@param opts? { silent?: boolean } silent: no message when there are no blocks
 function M.run(buf, opts)
   opts = opts or {}
-  buf = (buf == nil or buf == 0) and vim.api.nvim_get_current_buf() or buf
+  buf = util.buf(buf)
   if not require("chez.ts").available(buf) then
     if not opts.silent then
       util.notify("tree-sitter parser for scheme is missing (:TSInstall scheme)", vim.log.levels.ERROR)
@@ -190,7 +169,7 @@ function M.run(buf, opts)
   local tick = vim.api.nvim_buf_get_changedtick(buf)
   local job = { blocks = blocks, done = false }
   running[buf] = job
-  local req = { name = buf_name(buf), code = table.concat(lines, "\n"), blocks = {} }
+  local req = { name = util.buf_file(buf) or ("buffer-" .. buf), code = table.concat(lines, "\n"), blocks = {} }
   req.print_length = config.repl.print_length
   req.print_level = config.repl.print_level
   for i, b in ipairs(blocks) do
@@ -270,7 +249,7 @@ function M.run(buf, opts)
   end
 
   local root = require("chez.repl").root_for(buf)
-  local ok, proc = pcall(vim.system, command(root), {
+  local ok, proc = pcall(vim.system, util.chez_script("evalblock.ss", util.project_libdirs(root)), {
     cwd = root,
     stdin = vim.json.encode(req),
     text = true,

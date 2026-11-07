@@ -14,13 +14,7 @@ local diag_ns = vim.api.nvim_create_namespace("chez.eval")
 M.last = {}
 M.last_error = nil
 
-local function buf_file(buf)
-  local name = vim.api.nvim_buf_get_name(buf)
-  if name == "" or name:match("^%a[%w+.-]*://") then
-    return nil
-  end
-  return vim.fs.normalize(name)
-end
+local buf_file = util.buf_file
 
 ---Put an evaluation error on the buffer as a diagnostic, when its location
 ---is known (reader/syntax errors carry a position; runtime errors a backtrace).

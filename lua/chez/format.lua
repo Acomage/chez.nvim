@@ -1,6 +1,7 @@
 -- Re-indent Chez Scheme code with the same rules as 'indentexpr'.
 local indent = require("chez.indent")
 local reader = require("chez.reader")
+local util = require("chez.util")
 
 local M = {}
 
@@ -42,7 +43,7 @@ end
 ---@param first? integer
 ---@param last? integer
 function M.format(buf, first, last)
-  buf = (buf == nil or buf == 0) and vim.api.nvim_get_current_buf() or buf
+  buf = util.buf(buf)
   first = first or 0
   last = last or vim.api.nvim_buf_line_count(buf)
   local lines = vim.api.nvim_buf_get_lines(buf, first, last, false)

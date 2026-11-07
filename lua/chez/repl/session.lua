@@ -58,18 +58,13 @@ function Session:busy()
   return next(self.pending) ~= nil
 end
 
-local function scheme_dir()
-  return util.plugin_root .. "/scheme"
-end
-
 ---@return boolean ok, string? err
 function Session:start()
   if self.proc then
     return true
   end
   local cfg = config.repl
-  local cmd = vim.deepcopy(cfg.cmd)
-  vim.list_extend(cmd, { "--libdirs", scheme_dir(), "--script", scheme_dir() .. "/server.ss" })
+  local cmd = util.chez_script("server.ss")
   self.ready = false
   self.partial = ""
   local ok, proc = pcall(vim.system, cmd, {
@@ -97,15 +92,8 @@ function Session:start()
   self.proc = proc
   self.pid = proc.pid
   -- configure the session before anything else
-  local libdirs = {}
-  for _, d in ipairs(cfg.libdirs) do
-    local path = vim.fs.normalize(vim.fs.joinpath(self.root, d))
-    if vim.fn.isdirectory(path) == 1 then
-      libdirs[#libdirs + 1] = path
-    end
-  end
   self:request("set", {
-    libdirs = libdirs,
+    libdirs = util.project_libdirs(self.root),
     cwd = self.root,
     print_length = cfg.print_length,
     print_level = cfg.print_level,

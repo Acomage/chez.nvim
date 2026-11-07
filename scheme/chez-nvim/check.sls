@@ -15,13 +15,7 @@
 ;;; name (an unbound identifier).
 (library (chez-nvim check)
   (export check-port)
-  (import (chezscheme) (chez-nvim json))
-
-  (define (condition->string c)
-    (guard (e [#t (format "~s" c)])
-      (if (condition? c)
-          (call-with-string-output-port (lambda (p) (display-condition c p)))
-          (format "non-condition object raised: ~s" c))))
+  (import (chezscheme) (chez-nvim json) (chez-nvim common))
 
   (define diagnostics '())
 

@@ -14,14 +14,14 @@ M.sessions = {}
 ---@param buf? integer
 ---@return string
 function M.root_for(buf)
-  buf = (buf == nil or buf == 0) and vim.api.nvim_get_current_buf() or buf
+  buf = util.buf(buf)
   local root = vim.b[buf].chez_root
   if root then
     return root
   end
-  local name = vim.api.nvim_buf_get_name(buf)
-  if name ~= "" and not name:match("^%a[%w+.-]*://") then
-    root = detect.root(name) or vim.fs.dirname(vim.fs.normalize(name))
+  local file = util.buf_file(buf)
+  if file then
+    root = detect.root(file) or vim.fs.dirname(file)
   end
   return root or vim.fn.getcwd()
 end

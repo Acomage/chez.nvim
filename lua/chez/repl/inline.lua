@@ -53,7 +53,7 @@ end
 
 ---Remove all results in `buf`.
 function M.clear(buf)
-  buf = (buf == nil or buf == 0) and vim.api.nvim_get_current_buf() or buf
+  buf = util.buf(buf)
   vim.api.nvim_buf_clear_namespace(buf, ns_range, 0, -1)
   vim.api.nvim_buf_clear_namespace(buf, ns_text, 0, -1)
   marks[buf] = {}

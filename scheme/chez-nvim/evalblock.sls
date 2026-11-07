@@ -14,17 +14,7 @@
 ;;; by the code is captured per form; standard input is empty.
 (library (chez-nvim evalblock)
   (export run-blocks)
-  (import (chezscheme) (chez-nvim json))
-
-  (define (condition->string c)
-    (guard (e [#t (format "~s" c)])
-      (if (condition? c)
-          (call-with-string-output-port (lambda (p) (display-condition c p)))
-          (format "non-condition object raised: ~s" c))))
-
-  (define (ref msg key default)
-    (let ([p (and (list? msg) (assq key msg))])
-      (if (and p (not (eq? (cdr p) 'null))) (cdr p) default)))
+  (import (chezscheme) (chez-nvim json) (chez-nvim common))
 
   (define (unwrap x)
     (if (annotation? x) (annotation-expression x) x))

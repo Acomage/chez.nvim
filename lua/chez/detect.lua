@@ -1,4 +1,5 @@
 local config = require("chez.config")
+local util = require("chez.util")
 
 local M = {}
 
@@ -26,7 +27,7 @@ end
 ---@param buf? integer
 ---@return boolean
 function M.is_chez(buf)
-  buf = (buf == nil or buf == 0) and vim.api.nvim_get_current_buf() or buf
+  buf = util.buf(buf)
   local cached = vim.b[buf].chez
   if cached ~= nil then
     return cached == true or cached == 1
