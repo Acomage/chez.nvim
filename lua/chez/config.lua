@@ -32,6 +32,12 @@ local defaults = {
     -- instead of the current line (overrides autopair plugins for these keys).
     smart_brackets = true,
   },
+  brackets = {
+    -- Colour brackets by nesting depth.
+    rainbow = true,
+    -- Give the innermost list around the cursor a background (ChezCurrentForm).
+    current_form = true,
+  },
   repl = {
     -- Chez executable and extra arguments; chez.nvim appends
     -- `--libdirs <plugin>/scheme --script <plugin>/scheme/server.ss`.
@@ -97,6 +103,9 @@ local defaults = {
     macro_expand_optimize = "<localleader>mo",
     trace = "<localleader>tt",
     docs_online = "<localleader>hd",
+    -- jump to the matching bracket (Normal, Visual, Operator-pending);
+    -- ignores brackets in strings/comments/#\(, `N%` still works
+    jump_pair = "%",
     -- global-style keys, mapped buffer-locally in Chez buffers
     hover = "K",
     definition = "gd",

@@ -45,6 +45,10 @@ function M.attach(buf)
     require("chez.pairs").attach(buf)
     append_undo(buf, "silent! iunmap <buffer> ( | silent! iunmap <buffer> ) | silent! iunmap <buffer> [ | silent! iunmap <buffer> ]")
   end
+  if config.brackets.rainbow or config.brackets.current_form then
+    require("chez.brackets").attach(buf)
+    append_undo(buf, "exe \"lua require('chez.brackets').detach(" .. buf .. ")\"")
+  end
   bo.omnifunc = "v:lua.require'chez.complete'.omnifunc"
   append_undo(buf, "setl omnifunc<")
   require("chez.keymaps").attach(buf)

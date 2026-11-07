@@ -102,6 +102,24 @@ mini.pairs in LazyVim) only look at the current line, which loses a closer
 when a line holds just the `)` of a definition. These buffer-local mappings
 take precedence over such plugins.
 
+Rainbow brackets (`brackets.rainbow`): brackets are coloured by nesting depth
+with `ChezRainbow1` … `ChezRainbow6`; a closer without an opener uses
+`ChezBracketUnmatched`. Disable other rainbow plugins (e.g.
+rainbow-delimiters.nvim) for Chez buffers to avoid duplicate colouring.
+
+Current form (`brackets.current_form`): the innermost list around the cursor
+— from the opening bracket found by scanning left until one more `(` than
+`)` has been seen, to its closing bracket — gets the `ChezCurrentForm`
+background. With the cursor on a bracket, that bracket's list is used.
+
+Matching bracket (`keymaps.jump_pair`, `%`): jumps from an opening bracket to
+its closing bracket and back; when the cursor is not on a bracket, the first
+bracket after it on the line is used, like Vim's `%`. Works in Normal and
+Visual mode and as an inclusive motion (`d%`, `y%`); `N%` still goes to N% of
+the file.
+
+All three ignore brackets in strings, comments, `|symbols|` and `#\(`.
+
 ==============================================================================
 5. REPL AND EVALUATION                                           *chez-repl*
 
@@ -247,7 +265,7 @@ Buffer-local, in Chez buffers. Change or disable (`false`) entries in
   <localleader>ec   clear results              <localleader>tt  toggle trace
   <localleader>eq   backtrace to quickfix      <localleader>hd  online docs
   K                 documentation              gd               definition
-  <C-k> (insert)    signature
+  <C-k> (insert)    signature                  %                matching bracket
 
 ==============================================================================
 11. CONFIGURATION                                              *chez-config*
@@ -264,6 +282,10 @@ Defaults: >lua
     editing = {
       literal_quotes = true,  -- don't auto-pair ' and `
       smart_brackets = true,  -- see |chez-brackets|
+    },
+    brackets = {
+      rainbow = true,       -- rainbow brackets
+      current_form = true,  -- background on the list around the cursor
     },
     repl = {
       cmd = { "chez", "-q" },
@@ -307,5 +329,9 @@ when idle, "chez ●" when evaluating and "chez ○" when stopped.
   ChezInlineWarning  inline interrupt
   ChezInlinePending  evaluation in progress
   ChezEvalFlash      flash of the evaluated region
+  ChezRainbow1..6    rainbow brackets by depth
+  ChezBracketUnmatched  closing bracket without an opening one
+  ChezCurrentForm    background of the list around the cursor (default:
+                     Normal background tinted towards DiagnosticInfo)
 
  vim:tw=78:ts=8:ft=help:norl:

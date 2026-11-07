@@ -55,6 +55,14 @@ local function actions()
     },
     trace = { "n", function() require("chez.tools").trace() end, "Toggle trace" },
     docs_online = { "n", function() require("chez.doc").open_docs() end, "Open online docs" },
+    jump_pair = {
+      { "n", "x", "o" },
+      function()
+        return require("chez.brackets").jump_expr()
+      end,
+      "Matching bracket",
+      { expr = true },
+    },
     hover = { "n", function() require("chez.doc").hover() end, "Documentation" },
     definition = { "n", function() require("chez.tools").definition() end, "Go to definition" },
     signature = { "i", function() require("chez.doc").signature_help() end, "Signature" },

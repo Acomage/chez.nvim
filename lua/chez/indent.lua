@@ -155,10 +155,14 @@ local function elem(f, col, row, text, is_prefix, quoting)
 end
 
 ---Feed one line (0-based `row`) into the state.
+---`on_bracket(col, open, depth)` is called for every bracket outside strings,
+---comments and character literals: `col` is the 0-based byte column, `depth`
+---the nesting level of the list (1 = top-level form, 0 = unmatched closer).
 ---@param s chez.indent.State
 ---@param line string
 ---@param row integer
-function M.feed(s, line, row)
+---@param on_bracket? fun(col: integer, open: boolean, depth: integer)
+function M.feed(s, line, row, on_bracket)
   local len = #line
   local simple = not line:find("[\t\128-\255]")
   local function vcol(i) -- display column of byte index i (1-based)
@@ -217,8 +221,14 @@ function M.feed(s, line, row)
         end
         elem(f, col, row, nil, false)
         stack[#stack + 1] = new_frame(col, row, quoted)
+        if on_bracket then
+          on_bracket(i - 1, true, #stack - 1)
+        end
         i = i + 1
       elseif c == B.rparen or c == B.rbrack then
+        if on_bracket then
+          on_bracket(i - 1, false, #stack - 1)
+        end
         if #stack > 1 then
           stack[#stack] = nil
         else
@@ -245,6 +255,9 @@ function M.feed(s, line, row)
           -- vector / record literal
           elem(f, col, row, nil, false)
           stack[#stack + 1] = new_frame(col, row, true)
+          if on_bracket then
+            on_bracket(i, true, #stack - 1)
+          end
           i = i + 2
         elseif d == B.quote or d == B.bquote then
           elem(f, col, row, nil, true, false) -- syntax templates are code
@@ -280,6 +293,9 @@ function M.feed(s, line, row)
           if (nxt == B.lparen) and tok:match("^#v%a*%d*$") then
             elem(f, col, row, nil, false)
             stack[#stack + 1] = new_frame(col, row, true)
+            if on_bracket then
+              on_bracket(j - 1, true, #stack - 1)
+            end
             i = j + 1
           elseif tok:match("^#%d+=$") then
             elem(f, col, row, nil, true, false)

@@ -31,6 +31,9 @@ results, completion, documentation, macro expansion and diagnostics.
   identifiers.
 - **Brackets**: `(`/`)` pairing and skipping decided by the balance of the
   whole form, not the current line (fixes lost closers with autopair plugins).
+  Rainbow brackets, a background on the innermost list around the cursor,
+  and `%` jumping between matching brackets — all ignoring brackets in
+  strings, comments and `#\(`.
 
 ## Requirements
 
@@ -91,8 +94,8 @@ return {
 Then `:TSInstall scheme` (once) and `:checkhealth chez`.
 
 Keys are buffer-local under `<localleader>` (`\` in LazyVim): `e` evaluate,
-`c` REPL, `m` macro expansion, `t` trace, `h` help; plus `K`, `gd` and `<C-k>`
-in Insert mode. nvim-paredit adds its own keys (`>)`, `<(`, `>e`,
+`c` REPL, `m` macro expansion, `t` trace, `h` help; plus `K`, `gd`, `%` and
+`<C-k>` in Insert mode. nvim-paredit adds its own keys (`>)`, `<(`, `>e`,
 `<localleader>o`, `<localleader>r`, …).
 
 See `:help chez.nvim` for configuration, keymaps and commands.
