@@ -7,25 +7,31 @@ CONTENTS                                                        *chez.nvim*
   2. Setup ................................................ |chez-setup|
   3. File detection ....................................... |chez-detect|
   4. Indentation and formatting ........................... |chez-indent|
-  5. REPL and evaluation .................................. |chez-repl|
-  6. Completion ........................................... |chez-completion|
-  7. Documentation and navigation ......................... |chez-docs|
-  8. Diagnostics .......................................... |chez-diagnostics|
-  9. Commands ............................................. |chez-commands|
- 10. Keymaps .............................................. |chez-keymaps|
- 11. Configuration ........................................ |chez-config|
- 12. Highlights ........................................... |chez-highlights|
+  5. Brackets ............................................. |chez-brackets|
+  6. REPL and evaluation .................................. |chez-repl|
+  7. #eval blocks ......................................... |chez-eval-blocks|
+  8. Completion ........................................... |chez-completion|
+  9. Documentation and navigation ......................... |chez-docs|
+ 10. Diagnostics .......................................... |chez-diagnostics|
+ 11. Commands ............................................. |chez-commands|
+ 12. Keymaps .............................................. |chez-keymaps|
+ 13. Configuration ........................................ |chez-config|
+ 14. Highlights ........................................... |chez-highlights|
 
 ==============================================================================
-1. INTRODUCTION                                                 *chez-intro*
+1. INTRODUCTION                                                   *chez-intro*
 
 chez.nvim adds Chez Scheme specific editing support on top of Neovim's
 `scheme` filetype:
 
 - Lisp indentation that works on incomplete code, with Chez specific rules.
 - Tree-sitter highlighting of Chez syntax and all (chezscheme) procedures.
+- Brackets: pairing decided by the whole form, rainbow brackets, a background
+  on the list around the cursor, `%` between matching brackets.
 - A REPL per project: evaluate forms, see results inline, interrupt loops,
   answer `(read)` from Neovim, inspect backtraces.
+- `#eval` blocks: expressions in a `#|#eval ... |#` comment, evaluated after
+  loading the whole file, with results as virtual text.
 - Completion (blink.cmp source and 'omnifunc'), hover documentation built from
   the Chez Scheme User's Guide and the R6RS report, signature help.
 - Macro expansion (`expand` and `expand/optimize`), tracing, go to definition.
@@ -36,11 +42,11 @@ tree-sitter `scheme` parser (`:TSInstall scheme`). Optional: blink.cmp,
 which-key.nvim, conform.nvim, ripgrep.
 
 ==============================================================================
-2. SETUP                                                        *chez-setup*
+2. SETUP                                                          *chez-setup*
 
 With lazy.nvim: >lua
   {
-    "YOUR_NAME/chez.nvim",
+    "Acomage/chez.nvim",
     ft = "scheme",
     opts = {},
   }
@@ -58,7 +64,7 @@ nvim-paredit can re-indent with chez.nvim's rules after slurp/barf: >lua
 installation with `:checkhealth chez`.
 
 ==============================================================================
-3. FILE DETECTION                                              *chez-detect*
+3. FILE DETECTION                                                *chez-detect*
 
 `*.ss`, `*.sls`, `*.sps` and `*.sch` files get the `scheme` filetype (a `*.sls`
 file that looks like YAML stays `salt`). A `scheme` buffer is treated as Chez
@@ -72,7 +78,7 @@ Scheme when:
 Set `b:chez` to `true`/`false` to override detection.
 
 ==============================================================================
-4. INDENTATION AND FORMATTING                                  *chez-indent*
+4. INDENTATION AND FORMATTING                                    *chez-indent*
 
 'indentexpr' is set to a Lisp indenter that follows the usual Scheme style:
 
@@ -92,8 +98,10 @@ conform.nvim: >lua
   formatters_by_ft = { scheme = { "chez_indent" } },
 <
 
-                                                              *chez-brackets*
-Brackets: with `editing.smart_brackets`, typing `(` or `[` inserts a pair
+==============================================================================
+5. BRACKETS                                                    *chez-brackets*
+
+Smart brackets (`editing.smart_brackets`): typing `(` or `[` inserts a pair
 (unless the next character is part of a word), and typing `)` or `]` jumps
 over the same character only when the surrounding top-level form has no
 missing closers; otherwise it is inserted. The decision considers the whole
@@ -118,10 +126,11 @@ bracket after it on the line is used, like Vim's `%`. Works in Normal and
 Visual mode and as an inclusive motion (`d%`, `y%`); `N%` still goes to N% of
 the file.
 
-All three ignore brackets in strings, comments, `|symbols|` and `#\(`.
+All of these ignore brackets in strings, comments, `|symbols|` and `#\(`, and
+work inside `#eval` blocks (|chez-eval-blocks|).
 
 ==============================================================================
-5. REPL AND EVALUATION                                           *chez-repl*
+6. REPL AND EVALUATION                                             *chez-repl*
 
 A Chez process is started per project root (see `root_markers`) the first
 time code is evaluated. It runs a small bridge (`scheme/server.ss`) that
@@ -157,8 +166,10 @@ shown), <Up>/<Down> walk the history, <C-c> interrupts, <C-l> clears.
 Interrupting sends SIGINT to the process; the running evaluation stops and the
 session keeps its state.
 
-                                                            *chez-eval-blocks*
-`#eval` blocks: a block comment whose first line is `#eval` holds expressions
+==============================================================================
+7. #EVAL BLOCKS                                             *chez-eval-blocks*
+
+A block comment whose first line is `#eval` holds expressions
 to evaluate, like a scratchpad kept next to the code: >scheme
   (define (fact n) (if (= n 0) 1 (* n (fact (- n 1)))))
   #|#eval
@@ -181,8 +192,11 @@ scratch:
 Each result appears as virtual text at the end of its expression: `=> value`,
 `✓` without values, `✗ message` on errors, and `▷ text` for output the
 expression wrote. A failing top-level form of the file gets a `✗` too. Input
-reads see end-of-file. With `eval_blocks.on_save` the blocks are evaluated
-whenever the buffer is written; `eval_blocks.timeout` stops runaway code.
+reads see end-of-file. Editing an expression removes its result;
+`<localleader>ec` (`:Chez clear`) removes all results.
+
+With `eval_blocks.on_save` the blocks are evaluated whenever the buffer is
+written; `eval_blocks.timeout` stops runaway code.
 
 The code in a block is treated as code, not as a comment:
 - highlighting: tree-sitter parses it as Scheme (an injection, see
@@ -190,12 +204,13 @@ The code in a block is treated as code, not as a comment:
   `@chez.evalblock` (Normal foreground);
 - rainbow brackets, the current form, `%`, indentation and smart brackets
   work inside it;
-- diagnostics check it in the scope the block runner uses (the file's
-  definitions and the internal definitions of its libraries), e.g. unbound
-  identifiers and syntax errors in the block are reported.
+- diagnostics (|chez-diagnostics|) check it in the scope the block runner
+  uses (the file's definitions and the internal definitions of its
+  libraries): unbound identifiers and syntax errors in the block are
+  reported.
 
 ==============================================================================
-6. COMPLETION                                               *chez-completion*
+8. COMPLETION                                                *chez-completion*
 
 Candidates, most specific first: local bindings in scope (lambda
 parameters, let/do bindings, named-let names), top-level bindings of the
@@ -234,7 +249,7 @@ when it is open and through the history otherwise. Signatures are shown in
 the info popup.
 
 ==============================================================================
-7. DOCUMENTATION AND NAVIGATION                                  *chez-docs*
+9. DOCUMENTATION AND NAVIGATION                                    *chez-docs*
 
 `K` shows documentation for the identifier at the cursor: definitions in the
 buffer (with their leading `;` comments), then (chezscheme) identifiers
@@ -251,7 +266,7 @@ Macro expansion of the form at the cursor: `expand` shows the core form;
 so macros defined there are used.
 
 ==============================================================================
-8. DIAGNOSTICS                                             *chez-diagnostics*
+10. DIAGNOSTICS                                             *chez-diagnostics*
 
 On open, on save and after edits (`diagnostics.events`: leaving Insert mode
 and Normal mode changes, debounced by `diagnostics.debounce` ms; unsaved
@@ -261,11 +276,15 @@ top-level forms together without running them. It reports reader and syntax
 errors with their positions, errors in libraries (including references to
 unbound identifiers) and unbound variables in other code.
 
+The code of `#eval` blocks is checked too, in the scope the block runner
+uses: the file's definitions and the internal definitions of its libraries
+(|chez-eval-blocks|).
+
 Code is not executed, but macros are expanded, so macro transformers in the
 file do run.
 
 ==============================================================================
-9. COMMANDS                                                  *chez-commands*
+11. COMMANDS                                                   *chez-commands*
 
 `:Chez {subcommand}`
 
@@ -278,7 +297,7 @@ file do run.
   stop            stop the REPL
   interrupt       interrupt the running evaluation
   repl            toggle the REPL window
-  clear           clear inline results
+  clear           clear inline results (also of `#eval` blocks)
   result          show the last result in a float
   backtrace       backtrace of the last error in the quickfix list
   check           run diagnostics now
@@ -287,7 +306,7 @@ file do run.
   trace           toggle `trace` of the procedure at the cursor
 
 ==============================================================================
-10. KEYMAPS                                                   *chez-keymaps*
+12. KEYMAPS                                                     *chez-keymaps*
 
 Buffer-local, in Chez buffers. Change or disable (`false`) entries in
 `keymaps`; `keymaps = false` disables all.
@@ -302,12 +321,12 @@ Buffer-local, in Chez buffers. Change or disable (`false`) entries in
   <localleader>ev   show last result           <localleader>mo  expand/optimize
   <localleader>ec   clear results              <localleader>tt  toggle trace
   <localleader>eq   backtrace to quickfix      <localleader>hd  online docs
-  K                 documentation              gd               definition
-  <C-k> (insert)    signature                  %                matching bracket
-  <localleader>ei   evaluate `#eval` blocks
+  <localleader>ei   evaluate `#eval` blocks    K                documentation
+  gd                definition                 <C-k> (insert)   signature
+  % (n, x, o)       matching bracket
 
 ==============================================================================
-11. CONFIGURATION                                              *chez-config*
+13. CONFIGURATION                                                *chez-config*
 
 Defaults: >lua
   require("chez").setup({
@@ -356,7 +375,7 @@ Statusline: `require("chez").status()` returns "" without a REPL, "chez ◆"
 when idle, "chez ●" when evaluating and "chez ○" when stopped.
 
 ==============================================================================
-12. HIGHLIGHTS                                              *chez-highlights*
+14. HIGHLIGHTS                                               *chez-highlights*
 
   ChezReplPrefix     `; ` prefix in the REPL window
   ChezReplOutput     program output
@@ -374,5 +393,7 @@ when idle, "chez ●" when evaluating and "chez ○" when stopped.
   ChezBracketUnmatched  closing bracket without an opening one
   ChezCurrentForm    background of the list around the cursor (default:
                      Normal background tinted towards DiagnosticInfo)
+  @chez.evalblock    code in `#eval` blocks, replacing the comment colour
+                     (default: Normal foreground)
 
  vim:tw=78:ts=8:ft=help:norl:
