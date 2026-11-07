@@ -34,6 +34,7 @@ M.subcommands = {
       end
     end,
   },
+  evalblocks = { desc = "Evaluate the #eval blocks", run = function() require("chez.evalblock").run(0) end },
   load = { desc = "Load the current file", run = function() require("chez.eval").file() end },
   start = { desc = "Start the REPL", run = function() require("chez.repl").ensure(0) end },
   restart = { desc = "Restart the REPL", run = function() require("chez.repl").restart(0) end },

@@ -73,6 +73,14 @@ local defaults = {
     on_attach = true,
     timeout = 10000,
   },
+  -- `#| #eval ... |#` blocks: evaluated by a fresh Chez process that loads
+  -- the whole file (and the libraries it imports) first.
+  eval_blocks = {
+    -- evaluate the blocks whenever the buffer is written
+    on_save = false,
+    -- kill the process after this many milliseconds
+    timeout = 10000,
+  },
   inline = {
     -- Show evaluation results as virtual text after the evaluated form.
     enabled = true,
@@ -90,6 +98,7 @@ local defaults = {
     eval_file = "<localleader>ef",
     eval_selection = "<localleader>E",
     eval_operator = "<localleader>E",
+    eval_blocks = "<localleader>ei",
     show_result = "<localleader>ev",
     clear_results = "<localleader>ec",
     backtrace = "<localleader>eq",

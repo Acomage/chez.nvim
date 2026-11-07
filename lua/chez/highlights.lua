@@ -11,6 +11,7 @@ M.groups = {
   ChezInlineError = { link = "DiagnosticVirtualTextError" },
   ChezInlineWarning = { link = "DiagnosticVirtualTextWarn" },
   ChezInlinePending = { link = "Comment" },
+  ChezInlineOutput = { link = "Comment" },
   ChezEvalFlash = { link = "IncSearch" },
   ChezBracketUnmatched = { link = "Error" },
 }

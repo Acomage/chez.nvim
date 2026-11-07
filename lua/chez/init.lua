@@ -53,6 +53,7 @@ function M.attach(buf)
   append_undo(buf, "setl omnifunc<")
   require("chez.keymaps").attach(buf)
   require("chez.diagnostics").attach(buf)
+  require("chez.evalblock").attach(buf)
   vim.b[buf].chez_attached = true
 end
 

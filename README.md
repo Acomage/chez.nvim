@@ -25,6 +25,10 @@ results, completion, documentation, macro expansion and diagnostics.
   with their comments, REPL bindings; signature help; links to the online
   guide.
 - **Navigation**: `gd` via buffer, REPL source locations and ripgrep.
+- **`#eval` blocks**: expressions in a `#|#eval ... |#` comment are
+  evaluated by a fresh Chez process after loading the whole file and the
+  libraries it imports (library internals included); results as virtual
+  text after each expression.
 - **Macro expansion**: `expand` and `expand/optimize` (cp0) in a float.
 - **Diagnostics**: a checker process expands (without running) the buffer —
   on open, on save and after edits — and reports syntax errors and unbound

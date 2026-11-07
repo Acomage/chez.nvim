@@ -59,17 +59,30 @@ function M.clear(buf)
   marks[buf] = {}
 end
 
+---Remove all results whose region touches rows [sr, er].
+function M.clear_range(buf, sr, er)
+  for _, h in ipairs(vim.api.nvim_buf_get_extmarks(buf, ns_range, { sr, 0 }, { er, 2147483647 }, { overlap = true })) do
+    M.remove(buf, h[1])
+  end
+end
+
 local function text_opts(chunks)
   return { virt_text = chunks, virt_text_pos = "eol", hl_mode = "combine", priority = 300 }
 end
 
 ---Mark a region as being evaluated. Returns a handle for `M.set`.
+---@param opts? { flash?: boolean, force?: boolean } force: even when inline results are disabled
 ---@return integer? handle
-function M.start(buf, sr, sc, er, ec)
-  if config.inline.flash then
+function M.start(buf, sr, sc, er, ec, opts)
+  opts = opts or {}
+  local flash = opts.flash
+  if flash == nil then
+    flash = config.inline.flash
+  end
+  if flash then
     pcall(vim.hl.range, buf, ns_flash, "ChezEvalFlash", { sr, sc }, { er, ec }, { timeout = 200 })
   end
-  if not config.inline.enabled then
+  if not config.inline.enabled and not opts.force then
     return nil
   end
   attach(buf)
@@ -101,6 +114,12 @@ function M.set(buf, handle, resp)
   end
   local row = pos[3] and pos[3].end_row or pos[1]
   local max = config.inline.max_width
+  local chunks = {}
+  local output = resp.output and vim.trim(resp.output) or ""
+  if output ~= "" then
+    -- output written by the code (only for #eval blocks; REPL output goes to the REPL window)
+    chunks[1] = { " ▷ " .. util.truncate(output:gsub("\n", "⏎"), max), "ChezInlineOutput" }
+  end
   local chunk
   if resp.ok then
     local values = resp.values or {}
@@ -116,7 +135,8 @@ function M.set(buf, handle, resp)
     chunk = { " ✗ " .. util.truncate(msg, max), hl }
   end
   pcall(vim.api.nvim_buf_del_extmark, buf, ns_text, m[handle])
-  local opts = text_opts({ chunk })
+  chunks[#chunks + 1] = chunk
+  local opts = text_opts(chunks)
   m[handle] = vim.api.nvim_buf_set_extmark(buf, ns_text, row, 0, opts)
 end
 

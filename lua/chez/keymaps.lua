@@ -29,6 +29,7 @@ local function actions()
       "Eval motion",
       { expr = true },
     },
+    eval_blocks = { "n", function() require("chez.evalblock").run(0) end, "Eval #eval blocks" },
     show_result = { "n", eval("show_result"), "Show last result" },
     clear_results = {
       "n",

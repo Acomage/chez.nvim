@@ -157,6 +157,33 @@ shown), <Up>/<Down> walk the history, <C-c> interrupts, <C-l> clears.
 Interrupting sends SIGINT to the process; the running evaluation stops and the
 session keeps its state.
 
+                                                            *chez-eval-blocks*
+`#eval` blocks: a block comment whose first line is `#eval` holds expressions
+to evaluate, like a scratchpad kept next to the code: >scheme
+  (define (fact n) (if (= n 0) 1 (* n (fact (- n 1)))))
+  #|#eval
+  (fact 5)            ; => 120
+  (map fact '(1 2 3)) ; => (1 2 6)
+  |#
+<
+`#eval` may also stand on the line after `#|`. `<localleader>ei` (or
+`:Chez evalblocks`) evaluates all blocks of the buffer in a fresh Chez process
+(not the REPL), so the file and every library it imports are loaded from
+scratch:
+- the buffer's top-level forms are evaluated in order (unsaved changes
+  included). A `library` form is defined and its imports and body are also
+  evaluated at top level, so blocks can use definitions the library does not
+  export; a `top-level-program` is evaluated as its imports and body;
+- imported libraries are loaded from disk through the project's
+  `repl.libdirs` (save other buffers first);
+- then the expressions of each block are evaluated one by one.
+
+Each result appears as virtual text at the end of its expression: `=> value`,
+`✓` without values, `✗ message` on errors, and `▷ text` for output the
+expression wrote. A failing top-level form of the file gets a `✗` too. Input
+reads see end-of-file. With `eval_blocks.on_save` the blocks are evaluated
+whenever the buffer is written; `eval_blocks.timeout` stops runaway code.
+
 ==============================================================================
 6. COMPLETION                                               *chez-completion*
 
@@ -235,6 +262,7 @@ file do run.
   format          re-indent the buffer, or [range]
   eval            evaluate [range], or the top-level form at the cursor
   load            load the current file
+  evalblocks      evaluate the `#eval` blocks, see |chez-eval-blocks|
   start           start the REPL
   restart         restart the REPL
   stop            stop the REPL
@@ -266,6 +294,7 @@ Buffer-local, in Chez buffers. Change or disable (`false`) entries in
   <localleader>eq   backtrace to quickfix      <localleader>hd  online docs
   K                 documentation              gd               definition
   <C-k> (insert)    signature                  %                matching bracket
+  <localleader>ei   evaluate `#eval` blocks
 
 ==============================================================================
 11. CONFIGURATION                                              *chez-config*
@@ -308,6 +337,7 @@ Defaults: >lua
       on_attach = true,
       timeout = 10000,
     },
+    eval_blocks = { on_save = false, timeout = 10000 },  -- |chez-eval-blocks|
     inline = { enabled = true, max_width = 80, flash = true },
     keymaps = { ... },  -- see |chez-keymaps|
   })
@@ -328,6 +358,7 @@ when idle, "chez ●" when evaluating and "chez ○" when stopped.
   ChezInlineError    inline error
   ChezInlineWarning  inline interrupt
   ChezInlinePending  evaluation in progress
+  ChezInlineOutput   output of an `#eval` block expression
   ChezEvalFlash      flash of the evaluated region
   ChezRainbow1..6    rainbow brackets by depth
   ChezBracketUnmatched  closing bracket without an opening one
