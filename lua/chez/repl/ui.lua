@@ -31,14 +31,17 @@ end
 -- buffer & window
 --------------------------------------------------------------------------------
 
-local function is_complete(code)
+---Is `code` (typed at the prompt) complete: no open list, string, comment?
+function M.is_complete(code)
   local reader = require("chez.reader")
   local st = reader.new_state()
   for i, line in ipairs(vim.split(code, "\n", { plain = true })) do
     reader.feed(st, line, i - 1)
   end
-  return #st.stack == 1 and not st.str and not st.bar and st.block == 0
+  -- an open `#|` (maybe an #eval block) or #eval block is incomplete too
+  return reader.at_top(st) and not st.evalp and not st.evalb
 end
+local is_complete = M.is_complete
 
 local function set_prompt(buf, text)
   vim.fn.prompt_setprompt(buf, text)
