@@ -96,7 +96,7 @@ describe("completion", function()
 
   it("provides blink items with a Scheme-aware text edit", function()
     package.loaded["blink.cmp.types"] = package.loaded["blink.cmp.types"]
-      or { CompletionItemKind = { Function = 3, Keyword = 14, Struct = 22, Variable = 6 } }
+      or { CompletionItemKind = { Function = 3, Keyword = 14, Snippet = 15, Struct = 22, Variable = 6 } }
     local buf = open("blink.ss", { "(string->l" })
     local src = require("chez.complete.blink").new()
     local result
@@ -117,6 +117,28 @@ describe("completion", function()
       resolved = i
     end)
     assert.is_truthy(resolved.documentation.value:find("string->list", 1, true))
+  end)
+
+  it("offers an #eval block snippet for #ev", function()
+    package.loaded["blink.cmp.types"] = package.loaded["blink.cmp.types"]
+      or { CompletionItemKind = { Function = 3, Keyword = 14, Snippet = 15, Struct = 22, Variable = 6 } }
+    local buf = open("snippet.ss", { "#ev" })
+    local src = require("chez.complete.blink").new()
+    local result
+    src:get_completions({ bufnr = buf, cursor = { 1, 3 }, line = "#ev" }, function(r)
+      result = r
+    end)
+    local item
+    for _, it in ipairs(result.items) do
+      if it.label == "#eval" then
+        item = it
+      end
+    end
+    assert.is_not_nil(item)
+    assert.are.equal("eval", item.filterText)
+    assert.are.equal(vim.lsp.protocol.InsertTextFormat.Snippet, item.insertTextFormat)
+    assert.are.equal("#|#eval\n$0\n|#", item.textEdit.newText)
+    assert.are.same({ start = { line = 0, character = 0 }, ["end"] = { line = 0, character = 3 } }, item.textEdit.range)
   end)
 end)
 

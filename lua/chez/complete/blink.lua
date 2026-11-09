@@ -32,6 +32,28 @@ local function kind_of(c)
   return kinds.Variable
 end
 
+-- `#eval` (or `eval`) expands to an empty #eval block
+local function eval_block_item(row, start, col)
+  kinds = kinds or require("blink.cmp.types").CompletionItemKind
+  return {
+    label = "#eval",
+    kind = kinds.Snippet,
+    filterText = "eval",
+    insertTextFormat = vim.lsp.protocol.InsertTextFormat.Snippet,
+    textEdit = {
+      newText = "#|#eval\n$0\n|#",
+      range = {
+        start = { line = row, character = start },
+        ["end"] = { line = row, character = col },
+      },
+    },
+    documentation = {
+      kind = "markdown",
+      value = "```scheme\n#|#eval\n\n|#\n```\nExpressions evaluated after loading the file (`:Chez evalblocks`).",
+    },
+  }
+end
+
 local BOOST = { ["local"] = 4, buffer = 3, repl = 2, builtin = 0 }
 
 function source:get_completions(ctx, callback)
@@ -64,6 +86,9 @@ function source:get_completions(ctx, callback)
           data = { chez = c },
         }
       end
+    end
+    if (head == "" or head == "#") and vim.bo[buf].filetype == "scheme" then
+      items[#items + 1] = eval_block_item(row, start, col)
     end
     callback({ items = items, is_incomplete_forward = head ~= "", is_incomplete_backward = true })
   end)

@@ -182,8 +182,9 @@ to evaluate, like a scratchpad kept next to the code: >scheme
   (map fact '(1 2 3)) ; => (1 2 6)
   |#
 <
-`#eval` may also stand on the line after `#|`. To write one, press
-`<localleader>et` on a top-level form: it is put into a block of its own, and pressed inside a
+`#eval` may also stand on the line after `#|`. To write one, complete
+`#eval` (blink.cmp snippet, |chez-completion|), or press `<localleader>et`
+on a top-level form: it is put into a block of its own, and pressed inside a
 block, the block's delimiters are removed again. New lines in a block get no
 `|` comment leader (`comments` drops the runtime's three-piece `#|` entry).
 
@@ -246,6 +247,9 @@ blink.cmp: >lua
 <
 Scheme identifiers contain characters like `?`, `!`, `>`, `/`; the source
 computes the identifier prefix itself and returns text edits covering it.
+
+The blink.cmp source also offers a snippet: `#eval` (or `eval`) expands to
+an empty `#eval` block (|chez-eval-blocks|).
 
 Without blink.cmp, 'omnifunc' is set (|i_CTRL-X_CTRL-O|).
 
