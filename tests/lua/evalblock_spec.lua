@@ -65,6 +65,17 @@ describe("#eval blocks", function()
     assert.are.equal("\n(f)", blocks[2].code)
   end)
 
+  it("does not insert a | comment leader on new lines in a block", function()
+    local buf = open("leader.ss", { "#|#eval", "(+ 1 2)", "|#" })
+    vim.bo[buf].formatoptions = "jcroql" -- LazyVim's, continues comments on o/<CR>
+    vim.api.nvim_win_set_cursor(0, { 1, 0 })
+    vim.cmd("normal ox")
+    assert.are.equal("x", vim.trim(vim.api.nvim_buf_get_lines(buf, 1, 2, false)[1]))
+    vim.api.nvim_win_set_cursor(0, { 3, 0 })
+    vim.cmd("normal Ay\r(z)")
+    assert.are.equal("(z)", vim.trim(vim.api.nvim_buf_get_lines(buf, 3, 4, false)[1]))
+  end)
+
   it("loads the file and its imports, shows results as virtual text", function()
     local buf = open("main.sls", {
       "(library (main) (export f) (import (chezscheme) (util))",

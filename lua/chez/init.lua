@@ -49,6 +49,9 @@ function M.attach(buf)
     require("chez.brackets").attach(buf)
     append_undo(buf, "exe \"lua require('chez.brackets').detach(" .. buf .. ")\"")
   end
+  -- the runtime ftplugin declares #| |# a three-piece comment, so `o` and
+  -- <CR> inside it (also in #eval blocks) would insert a `|` leader
+  bo.comments = ":;;;;,:;;;,:;;,:;"
   bo.omnifunc = "v:lua.require'chez.complete'.omnifunc"
   append_undo(buf, "setl omnifunc<")
   require("chez.keymaps").attach(buf)
