@@ -65,6 +65,39 @@ describe("#eval blocks", function()
     assert.are.equal("\n(f)", blocks[2].code)
   end)
 
+  it("toggles a block around the top-level form at the cursor", function()
+    local buf = open("toggle.ss", {
+      "(define (f x)",
+      "  (* x 2))",
+      "(f 21) ; answer",
+    })
+    vim.api.nvim_win_set_cursor(0, { 2, 4 })
+    evalblock.toggle(buf)
+    local wrapped = { "#|#eval", "(define (f x)", "  (* x 2))", "|#", "(f 21) ; answer" }
+    assert.are.same(wrapped, vim.api.nvim_buf_get_lines(buf, 0, -1, false))
+    assert.are.equal(1, #evalblock.find(buf))
+    -- anywhere in the block, including the delimiters, removes them again
+    evalblock.toggle(buf, 3, 1)
+    assert.are.same({ "(define (f x)", "  (* x 2))", "(f 21) ; answer" }, vim.api.nvim_buf_get_lines(buf, 0, -1, false))
+    -- a form sharing its line with other text is wrapped on the line
+    evalblock.toggle(buf, 2, 1)
+    assert.are.same("#|#eval (f 21) |# ; answer", vim.api.nvim_buf_get_lines(buf, 2, 3, false)[1])
+    evalblock.toggle(buf, 2, 0)
+    assert.are.same("(f 21) ; answer", vim.api.nvim_buf_get_lines(buf, 2, 3, false)[1])
+  end)
+
+  it("toggles library body forms with their indentation", function()
+    local buf = open("toggle.sls", {
+      "(library (t) (export) (import (chezscheme))",
+      "  (display 1)",
+      "  )",
+    })
+    evalblock.toggle(buf, 1, 4)
+    assert.are.same({ "  #|#eval", "  (display 1)", "  |#" }, vim.api.nvim_buf_get_lines(buf, 1, 4, false))
+    evalblock.toggle(buf, 2, 4)
+    assert.are.same({ "  (display 1)", "  )" }, vim.api.nvim_buf_get_lines(buf, 1, 3, false))
+  end)
+
   it("does not insert a | comment leader on new lines in a block", function()
     local buf = open("leader.ss", { "#|#eval", "(+ 1 2)", "|#" })
     vim.bo[buf].formatoptions = "jcroql" -- LazyVim's, continues comments on o/<CR>

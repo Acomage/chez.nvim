@@ -182,7 +182,12 @@ to evaluate, like a scratchpad kept next to the code: >scheme
   (map fact '(1 2 3)) ; => (1 2 6)
   |#
 <
-`#eval` may also stand on the line after `#|`. `<localleader>ei` (or
+`#eval` may also stand on the line after `#|`. To write one, press
+`<localleader>et` on a top-level form: it is put into a block of its own, and pressed inside a
+block, the block's delimiters are removed again. New lines in a block get no
+`|` comment leader (`comments` drops the runtime's three-piece `#|` entry).
+
+`<localleader>ei` (or
 `:Chez evalblocks`) evaluates all blocks of the buffer in a fresh Chez process
 (not the REPL), so the file and every library it imports are loaded from
 scratch:
@@ -329,6 +334,7 @@ Buffer-local, in Chez buffers. Change or disable (`false`) entries in
   <localleader>ec   clear results              <localleader>tt  toggle trace
   <localleader>eq   backtrace to quickfix      <localleader>hd  online docs
   <localleader>ei   evaluate `#eval` blocks    K                documentation
+  <localleader>et   toggle `#eval` block
   gd                definition                 <C-k> (insert)   signature
   % (n, x, o)       matching bracket
 

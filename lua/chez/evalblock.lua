@@ -328,6 +328,93 @@ function M.run(buf, opts)
   spawn(job)
 end
 
+--------------------------------------------------------------------------------
+-- Wrapping forms in blocks
+--------------------------------------------------------------------------------
+
+---The `#eval` block containing (row, col), if any.
+---@return chez.EvalBlock?
+function M.block_at(buf, row, col)
+  for _, b in ipairs(M.find(buf)) do
+    local after_start = row > b.srow or (row == b.srow and col >= b.scol)
+    local before_end = row < b.erow or (row == b.erow and col < b.ecol)
+    if after_start and before_end then
+      return b
+    end
+  end
+end
+
+local function line(buf, row)
+  return vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1] or ""
+end
+
+---Remove the delimiters of block `b`: the lines of `#|#eval` and `|#` when
+---nothing else is on them, otherwise just the delimiters (and the blanks
+---between them and the code).
+local function unwrap(buf, b)
+  -- closing `|#` first: the opening positions stay valid
+  local close = line(buf, b.erow)
+  local cs = b.ecol - 2
+  if close:sub(1, cs):match("^%s*$") and close:sub(b.ecol + 1):match("^%s*$") then
+    vim.api.nvim_buf_set_lines(buf, b.erow, b.erow + 1, false, {})
+  else
+    local before = close:sub(1, cs)
+    local trimmed = before:match("^(.-)%s*$")
+    vim.api.nvim_buf_set_text(buf, b.erow, #trimmed, b.erow, b.ecol, {})
+  end
+  local tag_end = b.tcol + 5
+  local first, last = line(buf, b.srow), line(buf, b.trow)
+  if first:sub(1, b.scol):match("^%s*$") and last:sub(tag_end + 1):match("^%s*$") then
+    vim.api.nvim_buf_set_lines(buf, b.srow, b.trow + 1, false, {})
+  else
+    local blanks = #(last:sub(tag_end + 1):match("^[ \t]*"))
+    vim.api.nvim_buf_set_text(buf, b.srow, b.scol, b.trow, tag_end + blanks, {})
+  end
+end
+
+---Put `node` into an `#eval` block: on lines of their own when the form
+---fills its lines, otherwise `#|#eval form |#` on the same line.
+local function wrap(buf, node)
+  local sr, sc, er, ec = node:range()
+  local first, last = line(buf, sr), line(buf, er)
+  local indent = first:sub(1, sc)
+  if indent:match("^%s*$") and last:sub(ec + 1):match("^%s*$") then
+    vim.api.nvim_buf_set_lines(buf, er + 1, er + 1, false, { indent .. "|#" })
+    vim.api.nvim_buf_set_lines(buf, sr, sr, false, { indent .. "#|#eval" })
+  else
+    vim.api.nvim_buf_set_text(buf, er, ec, er, ec, { " |#" })
+    vim.api.nvim_buf_set_text(buf, sr, sc, sr, sc, { "#|#eval " })
+  end
+end
+
+---Toggle an `#eval` block at (row, col): remove the delimiters of the block
+---containing it, or put the top-level form there into a new block.
+---@param buf? integer
+---@param row? integer 0-based; defaults to the cursor
+---@param col? integer
+function M.toggle(buf, row, col)
+  buf = util.buf(buf)
+  if not row then
+    local c = vim.api.nvim_win_get_cursor(0)
+    row, col = c[1] - 1, c[2]
+  end
+  local ts = require("chez.ts")
+  if not ts.available(buf) then
+    util.notify("tree-sitter parser for scheme is missing (:TSInstall scheme)", vim.log.levels.ERROR)
+    return
+  end
+  local b = M.block_at(buf, row, col)
+  if b then
+    return unwrap(buf, b)
+  end
+  local node = ts.root_form(buf, row, col)
+  if not node then
+    util.notify("no top-level form at the cursor", vim.log.levels.INFO)
+    return
+  end
+  wrap(buf, node)
+end
+
 ---Run the blocks on save when `eval_blocks.on_save` is set.
 ---@param buf integer
 function M.attach(buf)

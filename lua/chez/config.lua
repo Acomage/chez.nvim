@@ -106,6 +106,9 @@ local defaults = {
     eval_selection = "<localleader>E",
     eval_operator = "<localleader>E",
     eval_blocks = "<localleader>ei",
+    -- put the top-level form at the cursor into an #eval block, or remove
+    -- the delimiters of the block at the cursor
+    eval_block_toggle = "<localleader>et",
     show_result = "<localleader>ev",
     clear_results = "<localleader>ec",
     backtrace = "<localleader>eq",

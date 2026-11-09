@@ -30,6 +30,13 @@ local function actions()
       { expr = true },
     },
     eval_blocks = { "n", function() require("chez.evalblock").run(0) end, "Eval #eval blocks" },
+    eval_block_toggle = {
+      "n",
+      function()
+        require("chez.evalblock").toggle(0)
+      end,
+      "Toggle #eval block",
+    },
     show_result = { "n", eval("show_result"), "Show last result" },
     clear_results = {
       "n",
