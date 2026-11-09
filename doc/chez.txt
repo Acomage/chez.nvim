@@ -327,6 +327,12 @@ file do run.
 Buffer-local, in Chez buffers. Change or disable (`false`) entries in
 `keymaps`; `keymaps = false` disables all.
 
+`<localleader>` is 'maplocalleader' (`\` in LazyVim). To put the keys under
+<Space>m, as in Doom Emacs, set it before plugins load (LazyVim:
+`lua/config/options.lua`): >lua
+  vim.g.maplocalleader = " m"
+<
+
   <localleader>ee   evaluate form              <localleader>cs  start REPL
   <localleader>er   evaluate top-level form    <localleader>cr  restart REPL
   <localleader>ew   evaluate word              <localleader>cq  stop REPL

@@ -78,6 +78,7 @@ local function actions()
 end
 
 local groups = {
+  { "<localleader>", "chez" },
   { "<localleader>e", "eval" },
   { "<localleader>c", "repl" },
   { "<localleader>m", "macro" },

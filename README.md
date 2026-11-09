@@ -103,7 +103,9 @@ Then `:TSInstall scheme` (once) and `:checkhealth chez`.
 Keys are buffer-local under `<localleader>` (`\` in LazyVim): `e` evaluate,
 `c` REPL, `m` macro expansion, `t` trace, `h` help; plus `K`, `gd`, `%` and
 `<C-k>` in Insert mode. nvim-paredit adds its own keys (`>)`, `<(`, `>e`,
-`<localleader>o`, `<localleader>r`, …).
+`<localleader>o`, `<localleader>r`, …). To use `<Space>m` instead of `\`
+(like Doom Emacs), set `vim.g.maplocalleader = " m"` in
+`lua/config/options.lua`.
 
 See `:help chez.nvim` for configuration, keymaps and commands.
 

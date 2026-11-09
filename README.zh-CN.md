@@ -73,7 +73,7 @@ return {
 
 然后执行一次 `:TSInstall scheme`，再执行 `:checkhealth chez`。
 
-键位是缓冲区局部的，位于 `<localleader>`（LazyVim 中为 `\`）之下：`e` 求值、`c` REPL、`m` 宏展开、`t` 跟踪、`h` 帮助；另有 `K`、`gd`、`%`，以及插入模式下的 `<C-k>`。nvim-paredit 会添加自己的键位（`>)`、`<(`、`>e`、`<localleader>o`、`<localleader>r` 等）。
+键位是缓冲区局部的，位于 `<localleader>`（LazyVim 中为 `\`）之下：`e` 求值、`c` REPL、`m` 宏展开、`t` 跟踪、`h` 帮助；另有 `K`、`gd`、`%`，以及插入模式下的 `<C-k>`。nvim-paredit 会添加自己的键位（`>)`、`<(`、`>e`、`<localleader>o`、`<localleader>r` 等）。如果想用 `<Space>m` 代替 `\`（类似 Doom Emacs），在 `lua/config/options.lua` 中设置 `vim.g.maplocalleader = " m"`。
 
 配置、键位映射和命令请参见 `:help chez.nvim`。
 
